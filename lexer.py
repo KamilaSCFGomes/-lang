@@ -36,7 +36,8 @@ COMENTARIOS = {
 }
 
 LITERAIS = {
-    "💬" : [43, "ASPAS"]
+    "💬" : [43, "TEXTO"],
+    "⏺️" : [44, "NUMERAL"]
 }
 
 PALAVRAS_RESERVADAS = {
@@ -45,11 +46,11 @@ PALAVRAS_RESERVADAS = {
     "❓" : [52, "IF"],
     "⁉️" : [53, "ELIF"],
     "❗" : [54, "ELSE"],
-    "📦" : [55, "VARIAVEL"],
-    "🔢" : [56, "NUMERO"],
-    "🔤" : [57, "TEXTO"],
-    "🔘" : [58, "BOOLEANO"],
-    "🤏" : [59, "PEQUENO"],
+    "📦🔢" : [55, "INT"],
+    "📦🤏🔢" : [56, "FLOAT"],
+    "📦🔤" : [57, "STRING"],
+    "📦🤏🔤" : [58, "CHAR"],
+    "📦🔘" : [59, "BOOLEANO"],
     "🔁" : [60, "FOR"],
     "⏹️" : [61, "BREAK"],
     "▶️" : [62, "CONTINUE"],
@@ -135,6 +136,9 @@ class Lexer:
         casasDecimais=0
         decimalJaFoi=False # só permite 1 ponto
 
+        if(len(texto)<=0):
+            return None
+        
         while texto[0]!='⏺' and int(texto[0]) == 0: #ignora 0 à esquerda
             print("A")
             texto=texto[3:]
@@ -145,6 +149,7 @@ class Lexer:
 
             if texto[0]=='⏺':
                 if decimalJaFoi: # se tiver 2 pontos está mal formado
+                    self.adicionaErro("NUMERAL MAL FORMADO")
                     return None
                 decimalJaFoi=True
                 texto=texto[2:]
@@ -171,6 +176,7 @@ class Lexer:
     def resolveNumeral(self):
         while self.codigo[self.batedor.posicao:self.batedor.posicao+2] in ALGARISMOS or self.codigo[self.batedor.posicao:self.batedor.posicao+1] in ALGARISMOS:
             self.batedor.avancar()
+        print("n",self.codigo[self.pivo.posicao:self.batedor.posicao])
         return self.traduzNumeral(self.codigo[self.pivo.posicao:self.batedor.posicao])
 
     def classificaToken(self):
@@ -200,29 +206,46 @@ class Lexer:
             self.pivo.copiaPonteiro(self.batedor)
             return True
         
-    def resolveLiteral(self):
-        if(self.codigo[self.batedor.posicao]=="💬"):
-            print("string")
-            self.batedor.avancar
-            while(self.codigo[self.batedor.posicao]!="💬"):
-                if(len(self.codigo)<=self.batedor.posicao):
-                    self.adicionaErro("STRING NAO FECHADA")
-                    return True
-                self.batedor.avancar
-            self.adicionaToken()
-            
-
         elif(self.codigo[self.batedor.posicao]=="🫃"):
             print("comentario longo: ")
+
             while(self.codigo[self.batedor.posicao]!='👶'):
+                
                 print(self.codigo[self.batedor.posicao], end="")
                 if(self.codigo[self.batedor.posicao] == '\n'):
                     self.batedor.proximaLinha()
                 else:
                     self.batedor.avancar()
+
+                if self.fimDoArquivo():
+                    self.adicionaErro("COMENTARIO LONGO NAO FECHADO")
+                    return True
+
+            self.batedor.avancar()
             self.pivo.copiaPonteiro(self.batedor)
             return True
+        
+    def resolveLiteral(self):
+        if(self.codigo[self.batedor.posicao]=="💬"):
+            print("comentario longo: ")
+            self.batedor.avancar()
 
+            while(self.codigo[self.batedor.posicao]!='💬'):
+                
+                print(self.codigo[self.batedor.posicao], end="")
+                if(self.codigo[self.batedor.posicao] == '\n'):
+                    self.batedor.proximaLinha()
+                else:
+                    self.batedor.avancar()
+
+                if self.fimDoArquivo():
+                    self.adicionaErro("STRING NAO FECHADA")
+                    return True
+
+            self.batedor.avancar()
+            self.adicionaToken(43, self.codigo[self.pivo.posicao:self.batedor.posicao], "TEXTO", self.pivo.linha, self.pivo.coluna)
+            self.pivo.copiaPonteiro(self.batedor)
+            return True
         else: return False
 
     def resolveNaLista(self, lista, salvarToken=True):
@@ -234,9 +257,6 @@ class Lexer:
             self.adicionaToken(resultado[0], self.codigo[self.pivo.posicao:self.batedor.posicao], resultado[1], self.pivo.linha, self.pivo.coluna)
         self.pivo.copiaPonteiro(self.batedor)
         return True
-
-    def resolveSeparadores(self):
-        return self.resolveNaLista(SEPARADORES)
     
     def ehEspaco(self):
         return ESPACOS.get(self.codigo[self.batedor.posicao]) == None
@@ -265,15 +285,60 @@ class Lexer:
         return CLASSE.get(self.codigo[self.batedor.posicao])
 
     def proximoToken(self):
-        while not (self.batedorEmClasse(ESPACOS) or self.batedorEmClasse(SEPARADORES)) and not self.fimDoArquivo():
+        while not self.fimDoArquivo() and not (self.batedorEmClasse(ESPACOS) or self.batedorEmClasse(SEPARADORES)):
             self.batedor.avancar()
 
         token = self.codigo[self.pivo.posicao:self.batedor.posicao-1]
         self.pivo.copiaPonteiro(self.batedor)
         return token
 
+    def ignorarEspaco(self):
+        if ESPACOS.get(self.codigo[self.batedor.posicao]) != None:
+            print(f"era espaço: [{self.codigo[self.batedor.posicao]}]")
+            if self.codigo[self.batedor.posicao]=="\n":
+                print("era enter")
+                self.batedor.proximaLinha()
+            else:
+                self.batedor.avancar()
+            self.pivo.copiaPonteiro(self.batedor)
+        
+    def resolveSeparadores(self):
+        resultado = SEPARADORES.get(self.codigo[self.batedor.posicao])
+        if resultado == None:
+            return False
+        
+        self.adicionaToken(resultado[0], self.codigo[self.batedor.posicao], resultado[1], self.batedor.linha, self.batedor.coluna)
+        return True
+    
+    def separaProximoToken(self):
+        while True:
+            if self.fimDoArquivo():
+                return False
+            
+            if ESPACOS.get(self.codigo[self.batedor.posicao]) != None:
+
+                return
+
+
+
+
     def detectarToken(self):
         print(f"[{self.pivo.posicao}-{self.batedor.posicao}] : [{self.codigo[self.pivo.posicao:self.batedor.posicao]}]")
+        self.ignorarEspaco()
+
+        # tokens com inicio bem definido:
+        if self.resolveComentarios(): return True
+        if self.resolveSeparadores(): return True
+        if self.resolveLiteral(): return True
+
+        # tokens com inicio variavel:
+        if self.resolveNumeral(): return True
+        
+
+        
+        return True
+
+        """
         print("espaco")
         print(self.codigo[self.pivo.posicao:self.batedor.posicao])
         if self.resolveEspacos(): return True
@@ -282,7 +347,7 @@ class Lexer:
         if self.resolveComentarios(): return True
         print("separador")
         if self.resolveSeparadores(): return True
-        print("passou")
+        print("passou") """
         
 
         tokenAtual = self.proximoToken()
@@ -297,9 +362,6 @@ class Lexer:
 
     def analiseLexica(self):
         while True:
-
-            self.batedor.avancar()
-
             if(self.fimDoArquivo() or self.tokenFinal()):
                 break
 
@@ -313,6 +375,8 @@ class Lexer:
             if not sucesso:
                 self.adicionaErro("TOKEN MAL FORMADO")
                 return False
+            
+            self.batedor.avancar()
         
         # se rodou sem erros até o fim
         return True
@@ -324,7 +388,7 @@ class Lexer:
 
 
 
-with open('exemplo.😎', 'r') as f:
+with open('-lang/exemplo.😎', 'r') as f:
     lexer = Lexer(f.read())
     lexer.analiseLexica()
     
@@ -332,6 +396,7 @@ with open('exemplo.😎', 'r') as f:
 
     lexer.imprimirTokens()
 
-    lexer.imprimeErro(lexer.tokens[-1])
+    if len(lexer.tokens)>0:
+        lexer.imprimeErro(lexer.tokens[-1])
 
     print(lexer.batedor.posicao)
