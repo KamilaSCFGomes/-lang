@@ -1,5 +1,12 @@
 import re
 
+def ehNumero(string):
+    try:
+        float(string)
+        return True
+    except ValueError:
+        return False
+
 OPERADORES = {
     "➕" : [11, "MAIS"],
     "➖" : [12, "MENOS"],
@@ -61,6 +68,7 @@ PALAVRAS_RESERVADAS = {
 }
 
 ALGARISMOS = ["0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "⏺️"]
+BOOLEANO = ["⭕", "❌"]
 
 class Token:
     def __init__(self, codigo, token, classe, linha, coluna):
@@ -87,7 +95,6 @@ class Ponteiro:
         self.posicao+=1
         self.coluna=1
         self.linha+=1
-        print("-linha-")
 
     def copiaPonteiro(self, ponteiro):
         self.posicao = ponteiro.posicao
@@ -139,8 +146,7 @@ class Lexer:
         if(len(texto)<=0):
             return None
         
-        while texto[0]!='⏺' and int(texto[0]) == 0: #ignora 0 à esquerda
-            print("A")
+        while ehNumero(texto[0]) and int(texto[0]) == 0: #ignora 0 à esquerda
             texto=texto[3:]
 
         while True:
@@ -154,64 +160,45 @@ class Lexer:
                 decimalJaFoi=True
                 texto=texto[2:]
                 casasDecimais=0
-                print("zerao")
             
-            else:
+            elif ehNumero(texto[0]):
                 final*=10
                 final += int(texto[0])
                 texto = texto[3:]
                
-                print("decimal")
                 casasDecimais +=1
 
-        if casasDecimais>=1:
+            else:
+                break
+
+        if casasDecimais>=1 and decimalJaFoi:
             final = final/(10**casasDecimais)
-        print(final)
         return final
     
-    def ehNumeral(self):
-        # os emojis de numero são compostos por 3 caracteres, exceto o ponto, que é composto por 2 caracteres
-        return self.codigo[self.batedor.posicao:self.batedor.posicao+2] in ALGARISMOS or self.codigo[self.batedor.posicao:self.batedor.posicao+1] in ALGARISMOS
-    
-    def resolveNumeral(self):
-        while self.codigo[self.batedor.posicao:self.batedor.posicao+2] in ALGARISMOS or self.codigo[self.batedor.posicao:self.batedor.posicao+1] in ALGARISMOS:
-            self.batedor.avancar()
-        print("n",self.codigo[self.pivo.posicao:self.batedor.posicao])
-        return self.traduzNumeral(self.codigo[self.pivo.posicao:self.batedor.posicao])
+    def resolveNumeral(self, token):
+        # confere se comeca com número
+        if re.match('^(0️⃣|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣|⏺️)+', token) == None:
+            return False
 
-    def classificaToken(self):
-        texto = self.codigo[self.pivo:self.batedor]
+        # confere se é um número bem formado   
+        if re.match('^(0️⃣|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)*(⏺️)?(0️⃣|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)+$', token) == None:
+            self.adicionaErro("NUMERO MAL FORMADO")
+            return True
         
-        tipo = self.ehNumeral(self, texto)
-        if tipo is not None:
-            return tipo
-
-        tipo = OPERADORES.get(texto)
-        if tipo is not None:
-            return tipo
-        
-        tipo = PALAVRAS_RESERVADAS.get(texto)
-        if tipo is not None:
-            return tipo
-        
-        tipo = SEPARADORES.get(texto)
-        return tipo
+        numero=self.traduzNumeral(token)
+        self.adicionaToken(44, numero, "NUMERAL", self.pivo.linha, self.pivo.coluna)
+        return True
 
     def resolveComentarios(self):
         if(self.codigo[self.batedor.posicao]=="💭"):
-            print("comentario curto: ")
             while(self.codigo[self.batedor.posicao]!='\n'):
-                print(self.codigo[self.batedor.posicao], end="")
                 self.batedor.avancar()
             self.pivo.copiaPonteiro(self.batedor)
             return True
         
         elif(self.codigo[self.batedor.posicao]=="🫃"):
-            print("comentario longo: ")
-
             while(self.codigo[self.batedor.posicao]!='👶'):
                 
-                print(self.codigo[self.batedor.posicao], end="")
                 if(self.codigo[self.batedor.posicao] == '\n'):
                     self.batedor.proximaLinha()
                 else:
@@ -225,14 +212,15 @@ class Lexer:
             self.pivo.copiaPonteiro(self.batedor)
             return True
         
+        else:
+            return False
+        
     def resolveLiteral(self):
         if(self.codigo[self.batedor.posicao]=="💬"):
-            print("comentario longo: ")
             self.batedor.avancar()
 
             while(self.codigo[self.batedor.posicao]!='💬'):
                 
-                print(self.codigo[self.batedor.posicao], end="")
                 if(self.codigo[self.batedor.posicao] == '\n'):
                     self.batedor.proximaLinha()
                 else:
@@ -246,11 +234,12 @@ class Lexer:
             self.adicionaToken(43, self.codigo[self.pivo.posicao:self.batedor.posicao], "TEXTO", self.pivo.linha, self.pivo.coluna)
             self.pivo.copiaPonteiro(self.batedor)
             return True
-        else: return False
+
+        else:
+            return False
 
     def resolveNaLista(self, lista, salvarToken=True):
         resultado = lista.get(self.codigo[self.pivo.posicao:self.batedor.posicao])
-        print(resultado)
         if resultado == None:
             return False
         if salvarToken:
@@ -284,81 +273,88 @@ class Lexer:
     def batedorEmClasse(self, CLASSE):
         return CLASSE.get(self.codigo[self.batedor.posicao])
 
+    def verificaPalavrasReservadas(self, token):
+        resultado = PALAVRAS_RESERVADAS.get(token)
+        if resultado!=None:
+            self.adicionaToken(resultado[0], token, resultado[1], self.pivo.linha, self.pivo.coluna)
+            return True
+
+        return False
+
+    def verificaOperadores(self, token):
+        resultado = OPERADORES.get(token)
+        if resultado!=None:
+            self.adicionaToken(resultado[0], token, resultado[1], self.pivo.linha, self.pivo.coluna)
+            return True
+
+        return False
+
     def proximoToken(self):
         while not self.fimDoArquivo() and not (self.batedorEmClasse(ESPACOS) or self.batedorEmClasse(SEPARADORES)):
             self.batedor.avancar()
 
-        token = self.codigo[self.pivo.posicao:self.batedor.posicao-1]
+        token = self.codigo[self.pivo.posicao:self.batedor.posicao]
+        print("token:", token)
+        print(self.codigo[self.pivo.posicao], self.codigo[self.batedor.posicao])
         self.pivo.copiaPonteiro(self.batedor)
         return token
 
     def ignorarEspaco(self):
         if ESPACOS.get(self.codigo[self.batedor.posicao]) != None:
-            print(f"era espaço: [{self.codigo[self.batedor.posicao]}]")
             if self.codigo[self.batedor.posicao]=="\n":
-                print("era enter")
                 self.batedor.proximaLinha()
             else:
                 self.batedor.avancar()
             self.pivo.copiaPonteiro(self.batedor)
         
     def resolveSeparadores(self):
-        resultado = SEPARADORES.get(self.codigo[self.batedor.posicao])
+        resultado = SEPARADORES.get(self.codigo[self.pivo.posicao:self.batedor.posicao])
         if resultado == None:
             return False
         
-        self.adicionaToken(resultado[0], self.codigo[self.batedor.posicao], resultado[1], self.batedor.linha, self.batedor.coluna)
+        self.adicionaToken(resultado[0], self.codigo[self.pivo.posicao:self.batedor.posicao], resultado[1], self.batedor.linha, self.batedor.coluna)
+        self.pivo.copiaPonteiro(self.batedor)
         return True
     
     def separaProximoToken(self):
         while True:
             if self.fimDoArquivo():
-                return False
+                return True
             
-            if ESPACOS.get(self.codigo[self.batedor.posicao]) != None:
-
+            if ESPACOS.get(self.codigo[self.batedor.posicao]) != None and SEPARADORES.get(self.codigo[self.batedor.posicao]) != None:
                 return
 
-
-
+    def resolveIdentificador(self, token):
+        if len(token)<=0 or re.match('^\s', self.codigo[self.pivo.posicao:self.batedor.posicao]) != None:
+            print("vazio")
+            return False
+        
+        if(len(token)>0):
+            self.adicionaToken(45, token, "IDENTIFICADOR", self.pivo.linha, self.pivo.coluna)
+            return True
 
     def detectarToken(self):
-        print(f"[{self.pivo.posicao}-{self.batedor.posicao}] : [{self.codigo[self.pivo.posicao:self.batedor.posicao]}]")
         self.ignorarEspaco()
-
+        print(f"[{self.pivo.posicao}-{self.batedor.posicao}] : [{self.codigo[self.pivo.posicao:self.batedor.posicao]}]")
+        
         # tokens com inicio bem definido:
         if self.resolveComentarios(): return True
+        print(self.pivo.posicao, self.batedor.posicao)
         if self.resolveSeparadores(): return True
         if self.resolveLiteral(): return True
 
-        # tokens com inicio variavel:
-        if self.resolveNumeral(): return True
-        
+        token = self.proximoToken()
+        print(self.pivo.posicao, self.batedor.posicao)
+        if self.verificaOperadores(token): return True
+        if self.verificaPalavrasReservadas(token): return True
+        if self.resolveNumeral(token): return True
 
+        if(len(token)>0):
+            self.adicionaToken(45, token, "IDENTIFICADOR", self.pivo.linha, self.pivo.coluna)
+            return True
         
-        return True
-
-        """
-        print("espaco")
-        print(self.codigo[self.pivo.posicao:self.batedor.posicao])
-        if self.resolveEspacos(): return True
-        print(self.codigo[self.pivo.posicao:self.batedor.posicao])
-        print("comentario")
-        if self.resolveComentarios(): return True
-        print("separador")
-        if self.resolveSeparadores(): return True
-        print("passou") """
-        
-
-        tokenAtual = self.proximoToken()
-        print(tokenAtual)
-
-        if self.resolveQuebra(): return True
-        
-        if self.ehNumeral() and self.resolveNumeral(): return True
-        self.adicionaErro()
+        self.adicionaErro("TOKEN MAL FORMADO")
         return False # tipo nao identificado, token mal formado
-
 
     def analiseLexica(self):
         while True:
@@ -368,9 +364,14 @@ class Lexer:
             # se um token foi encontrado, retorna true
             sucesso = self.detectarToken()
 
-            # se o ultimo token for um erro:
-            if len(lexer.tokens)>0 and lexer.tokens[-1].codigo == 0:
-                return False
+            if len(self.tokens)>0:
+                # se o ultimo token for um erro
+                if self.tokens[-1].codigo == 0:
+                    return False
+                
+                # se o ultimo token for o fim do codigo
+                if self.tokens[-1].codigo == 51:
+                    return True
             
             if not sucesso:
                 self.adicionaErro("TOKEN MAL FORMADO")
@@ -386,17 +387,15 @@ class Lexer:
             print(i.representa())
 
 
-
-
 with open('-lang/exemplo.😎', 'r') as f:
     lexer = Lexer(f.read())
     lexer.analiseLexica()
     
-    print("FIM DO LEXER")
+    print("\nFIM DO LEXER\n")
 
     lexer.imprimirTokens()
 
     if len(lexer.tokens)>0:
         lexer.imprimeErro(lexer.tokens[-1])
 
-    print(lexer.batedor.posicao)
+    texto = "6️⃣"
