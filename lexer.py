@@ -1,12 +1,5 @@
 import re
 
-def ehNumero(string):
-    try:
-        float(string)
-        return True
-    except ValueError:
-        return False
-
 OPERADORES = {
     "➕" : [11, "MAIS"],
     "➖" : [12, "MENOS"],
@@ -44,7 +37,7 @@ COMENTARIOS = {
 
 LITERAIS = {
     "💬" : [43, "TEXTO"],
-    "⏺️" : [44, "NUMERAL"]
+    "⏺️" : [44, "NUMERAL"],
 }
 
 PALAVRAS_RESERVADAS = {
@@ -92,8 +85,7 @@ class Ponteiro:
         self.coluna+=1
     
     def proximaLinha(self):
-        self.posicao+=1
-        self.coluna=1
+        self.coluna=0
         self.linha+=1
 
     def copiaPonteiro(self, ponteiro):
@@ -124,13 +116,6 @@ class Lexer:
     def tokenFinal(self):
         if self.codigo[self.batedor.posicao] == "🏁":
             self.adicionaToken(0, "🏁", "FIM", self.pivo.linha, self.pivo.coluna)
-            return True
-        return False
-    
-    def lidarComQuebraDeLinha(self):
-        if self.codigo[self.batedor] == '\n':
-            self.linha==1
-            self.coluna+=1
             return True
         return False
 
@@ -185,6 +170,7 @@ class Lexer:
             self.adicionaErro("NUMERO MAL FORMADO")
             return True
         
+        # começa com numero mas não está bem formado
         numero=self.traduzNumeral(token)
         self.adicionaToken(44, numero, "NUMERAL", self.pivo.linha, self.pivo.coluna)
         return True
@@ -193,22 +179,27 @@ class Lexer:
         if(self.codigo[self.batedor.posicao]=="💭"):
             while(self.codigo[self.batedor.posicao]!='\n'):
                 self.batedor.avancar()
+
+            self.batedor.proximaLinha()
+
+            print(f"comentario: [{self.codigo[self.pivo.posicao:self.batedor.posicao]}]")
             self.pivo.copiaPonteiro(self.batedor)
             return True
         
         elif(self.codigo[self.batedor.posicao]=="🫃"):
             while(self.codigo[self.batedor.posicao]!='👶'):
-                
+
                 if(self.codigo[self.batedor.posicao] == '\n'):
                     self.batedor.proximaLinha()
-                else:
-                    self.batedor.avancar()
+                
+                self.batedor.avancar()
 
                 if self.fimDoArquivo():
                     self.adicionaErro("COMENTARIO LONGO NAO FECHADO")
                     return True
 
             self.batedor.avancar()
+            print(f"comentario: [{self.codigo[self.pivo.posicao:self.batedor.posicao]}]")
             self.pivo.copiaPonteiro(self.batedor)
             return True
         
@@ -220,11 +211,11 @@ class Lexer:
             self.batedor.avancar()
 
             while(self.codigo[self.batedor.posicao]!='💬'):
-                
+
                 if(self.codigo[self.batedor.posicao] == '\n'):
                     self.batedor.proximaLinha()
-                else:
-                    self.batedor.avancar()
+                
+                self.batedor.avancar()                 
 
                 if self.fimDoArquivo():
                     self.adicionaErro("STRING NAO FECHADA")
@@ -246,27 +237,16 @@ class Lexer:
             self.adicionaToken(resultado[0], self.codigo[self.pivo.posicao:self.batedor.posicao], resultado[1], self.pivo.linha, self.pivo.coluna)
         self.pivo.copiaPonteiro(self.batedor)
         return True
-    
-    def ehEspaco(self):
-        return ESPACOS.get(self.codigo[self.batedor.posicao]) == None
-
-    def ehQuebra(self):
-        return self.codigo[self.batedor.posicao] == '\n'
 
     def resolveEspacos(self):
-        if self.ehEspaco():
-            if(self.ehQuebra()):
+        if ESPACOS.get(self.codigo[self.batedor.posicao]) != None:
+            print("espaco")
+            if self.codigo[self.batedor.posicao] == '\n':
+                print("quebra")
                 self.batedor.proximaLinha()
-            else:
-                self.batedor.avancar()
+                            
             self.pivo.copiaPonteiro(self.batedor)
-            return True
-        return False
 
-    def resolveQuebra(self):
-        if(self.codigo[self.pivo.posicao]=='\n'):
-            self.batedor.proximaLinha()
-            self.pivo.copiaPonteiro(self.batedor)
             return True
         return False
 
@@ -293,19 +273,26 @@ class Lexer:
         while not self.fimDoArquivo() and not (self.batedorEmClasse(ESPACOS) or self.batedorEmClasse(SEPARADORES)):
             self.batedor.avancar()
 
+        if not self.fimDoArquivo() and self.codigo[self.batedor.posicao] == '\n':
+            self.batedor.proximaLinha()
+
         token = self.codigo[self.pivo.posicao:self.batedor.posicao]
-        print("token:", token)
-        print(self.codigo[self.pivo.posicao], self.codigo[self.batedor.posicao])
-        self.pivo.copiaPonteiro(self.batedor)
         return token
 
     def ignorarEspaco(self):
+
         if ESPACOS.get(self.codigo[self.batedor.posicao]) != None:
+            print("espaco")
+            
             if self.codigo[self.batedor.posicao]=="\n":
                 self.batedor.proximaLinha()
-            else:
-                self.batedor.avancar()
+            
+            self.batedor.avancar()
             self.pivo.copiaPonteiro(self.batedor)
+            
+            return True
+        return False
+
         
     def resolveSeparadores(self):
         resultado = SEPARADORES.get(self.codigo[self.pivo.posicao:self.batedor.posicao])
@@ -325,29 +312,29 @@ class Lexer:
                 return
 
     def resolveIdentificador(self, token):
-        if len(token)<=0 or re.match('^\s', self.codigo[self.pivo.posicao:self.batedor.posicao]) != None:
-            print("vazio")
-            return False
-        
+      
         if(len(token)>0):
             self.adicionaToken(45, token, "IDENTIFICADOR", self.pivo.linha, self.pivo.coluna)
             return True
+        
+        return False
 
     def detectarToken(self):
-        self.ignorarEspaco()
-        print(f"[{self.pivo.posicao}-{self.batedor.posicao}] : [{self.codigo[self.pivo.posicao:self.batedor.posicao]}]")
+        print(f"pivo: {self.pivo.posicao}: {self.pivo.linha} - {self.pivo.coluna}")
+        print(f"batedor: {self.batedor.posicao}: {self.batedor.linha} - {self.batedor.coluna}")
+        print(self.codigo[self.pivo.posicao:self.batedor.posicao])
+
+        if self.resolveEspacos(): return True
         
         # tokens com inicio bem definido:
         if self.resolveComentarios(): return True
-        print(self.pivo.posicao, self.batedor.posicao)
-        if self.resolveSeparadores(): return True
-        if self.resolveLiteral(): return True
+        #if self.resolveSeparadores(): return True
+        #if self.resolveLiteral(): return True
 
         token = self.proximoToken()
-        print(self.pivo.posicao, self.batedor.posicao)
-        if self.verificaOperadores(token): return True
+        #if self.verificaOperadores(token): return True
         if self.verificaPalavrasReservadas(token): return True
-        if self.resolveNumeral(token): return True
+        #if self.resolveNumeral(token): return True
 
         if(len(token)>0):
             self.adicionaToken(45, token, "IDENTIFICADOR", self.pivo.linha, self.pivo.coluna)
@@ -358,7 +345,7 @@ class Lexer:
 
     def analiseLexica(self):
         while True:
-            if(self.fimDoArquivo() or self.tokenFinal()):
+            if(self.fimDoArquivo()):
                 break
 
             # se um token foi encontrado, retorna true
@@ -378,6 +365,7 @@ class Lexer:
                 return False
             
             self.batedor.avancar()
+            self.pivo.copiaPonteiro(self.batedor)
         
         # se rodou sem erros até o fim
         return True
