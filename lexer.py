@@ -19,22 +19,25 @@ OPERADORES = {
     "⬆️" : [18, "MAIOR"],
     "⬇️" : [19, "MENOR"],
     "🚫" : [20, "NAO"],
-    "❔" : [21, "TERNARIO1"],
-    "❕" : [22, "TERNARIO2"],
-    "👉" : [23, "ATRIBUICAO"]
+    "🤞" : [21, "AND"],
+    "✌️" : [22, "OR"],
+    "❔" : [23, "TERNARIO1"],
+    "❕" : [24, "TERNARIO2"],
+    "👉" : [25, "ATRIBUICAO"]
 }
 
 SEPARADORES = {
     "(" : [30, "ABRE_PARENTESES"],
     ")" : [31, "FECHA_PARENTESES"],
     "{" : [32, "ABRE_CHAVE"],
-    "}" : [33, "FECHA_CHAVE"]
+    "}" : [33, "FECHA_CHAVE"],
+    ":" : [34, "DOIS_PONTOS"]
 }
 
 ESPACOS = {
-    "\n" : [34, "ENTER"],
-    "\t" : [35, "TAB"],
-    " " : [36, "ESPACO"]
+    "\n" : [35, "ENTER"],
+    "\t" : [36, "TAB"],
+    " " : [37, "ESPACO"]
 }
 
 COMENTARIOS = {
@@ -46,6 +49,11 @@ COMENTARIOS = {
 LITERAIS = {
     "💬" : [43, "TEXTO"],
     "⏺️" : [44, "NUMERAL"],
+}
+
+BOOLEANO = {
+    "⭕" : [45, "VERDADEIRO"],
+    "❌" : [46, "FALSO"]
 }
 
 PALAVRAS_RESERVADAS = {
@@ -69,7 +77,6 @@ PALAVRAS_RESERVADAS = {
 }
 
 ALGARISMOS = ["0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "⏺️"]
-BOOLEANO = ["⭕", "❌"]
 
 class Token:
     def __init__(self, codigo, token, classe, linha, coluna):
@@ -80,7 +87,7 @@ class Token:
         self.coluna = coluna
 
     def representa(self):
-        return f"{self.codigo}, {self.token}, {self.classe}, {self.linha}, {self.coluna}"
+        return f"{self.codigo},\t{self.token}, {self.classe},\t{self.linha}, {self.coluna}"
 
 class Ponteiro:
     def __init__(self, posicao=0, linha=1, coluna=1):
@@ -114,9 +121,9 @@ class Lexer:
     def adicionaErro(self, tipo="ERRO LEXICO NAO ESPECIFICADO"):
         self.adicionaToken(0, tipo, "ERRO", self.pivo.linha, self.pivo.coluna)
     
-    def imprimeErro(self, token):
-        if token.codigo == 0:
-            print("⚠️  Erro!⚠️   ", token.token, " 📍 ↔️ ", token.linha, ",↕️ ", token.coluna)
+    def imprimeErroSeTiver(self):
+        if len(self.tokens)>0 and self.tokens[-1].codigo == 0:
+            print("⚠️  Erro!⚠️   ", self.tokens[-1].token, " 📍 ↔️ ", self.tokens[-1].linha, ",↕️ ", self.tokens[-1].coluna)
 
     def fimDoArquivo(self):
         return self.batedor.posicao >= len(self.codigo)
@@ -129,7 +136,7 @@ class Lexer:
 
     def adicionaToken(self, codigo, token, classe, linha, coluna):
         self.tokens.append(Token(codigo, token, classe, linha, coluna))
-        print(self.tokens[-1].representa())
+        # print(self.tokens[-1].representa())
 
     def traduzNumeral(self, texto):
         final=0
@@ -190,7 +197,7 @@ class Lexer:
 
             self.batedor.proximaLinha()
 
-            print(f"comentario: [{self.codigo[self.pivo.posicao:self.batedor.posicao]}]")
+            # print(f"comentario: [{self.codigo[self.pivo.posicao:self.batedor.posicao]}]")
             self.pivo.copiaPonteiro(self.batedor)
             return True
         
@@ -205,18 +212,17 @@ class Lexer:
                     self.adicionaErro("COMENTARIO LONGO NAO FECHADO")
                     return True
 
-                if(self.codigo[self.batedor.posicao] == '\n'):
-                    self.batedor.proximaLinha()
-
             self.batedor.avancar()
-            print(f"comentario: [{self.codigo[self.pivo.posicao:self.batedor.posicao]}]")
+            if(self.codigo[self.batedor.posicao] == '\n'):
+                    self.batedor.proximaLinha()
+            # print(f"comentario: [{self.codigo[self.pivo.posicao:self.batedor.posicao]}]")
             self.pivo.copiaPonteiro(self.batedor)
             return True
         
         else:
             return False
         
-    def resolveLiteral(self):
+    def resolveTexto(self):
         if(self.codigo[self.batedor.posicao]=="💬"):
             self.batedor.avancar()
 
@@ -232,21 +238,15 @@ class Lexer:
                     return True
 
             self.batedor.avancar()
+            if(self.codigo[self.batedor.posicao] == '\n'):
+                    self.batedor.proximaLinha()
+
             self.adicionaToken(43, self.codigo[self.pivo.posicao:self.batedor.posicao], "TEXTO", self.pivo.linha, self.pivo.coluna)
             self.pivo.copiaPonteiro(self.batedor)
             return True
 
         else:
             return False
-
-    def resolveNaLista(self, lista, salvarToken=True):
-        resultado = lista.get(self.codigo[self.pivo.posicao:self.batedor.posicao])
-        if resultado == None:
-            return False
-        if salvarToken:
-            self.adicionaToken(resultado[0], self.codigo[self.pivo.posicao:self.batedor.posicao], resultado[1], self.pivo.linha, self.pivo.coluna)
-        self.pivo.copiaPonteiro(self.batedor)
-        return True
 
     def resolveEspacos(self):
         if ESPACOS.get(self.codigo[self.batedor.posicao]) != None:
@@ -272,6 +272,14 @@ class Lexer:
 
     def verificaOperadores(self, token):
         resultado = OPERADORES.get(token)
+        if resultado!=None:
+            self.adicionaToken(resultado[0], token, resultado[1], self.pivo.linha, self.pivo.coluna)
+            return True
+
+        return False
+    
+    def verificaBooleano(self, token):
+        resultado = BOOLEANO.get(token)
         if resultado!=None:
             self.adicionaToken(resultado[0], token, resultado[1], self.pivo.linha, self.pivo.coluna)
             return True
@@ -307,24 +315,25 @@ class Lexer:
 
     def resolveIdentificador(self, token):
       
-        if(len(token)>0):
+        if len(token)>0:
             self.adicionaToken(45, token, "IDENTIFICADOR", self.pivo.linha, self.pivo.coluna)
             return True
         
         return False
-
+    
     def detectarToken(self):
 
         if self.resolveEspacos(): return True
         
-        # tokens com inicio bem definido:
+        # tokens com limite bem definido:
         if self.resolveComentarios(): return True
         if self.resolveSeparadores(): return True
-        if self.resolveLiteral(): return True
+        if self.resolveTexto(): return True
 
-        # tokens com inicio variavel
+        # tokens com limite variavel
         token = self.proximoToken()
         if self.verificaOperadores(token): return True
+        if self.verificaBooleano(token): return True
         if self.verificaPalavrasReservadas(token): return True
         if self.resolveNumeral(token): return True
 
@@ -367,15 +376,11 @@ class Lexer:
             print(i.representa())
 
 
-with open('-lang/exemplo.😎', 'r') as f:
+with open('exemplo.😎', 'r') as f:
     lexer = Lexer(f.read())
     lexer.analiseLexica()
     
-    print("\nFIM DO LEXER\n")
-
+    print("COD,\tTOKEN,\tTIPO,\tLINHA,\tCOLUNA")
     lexer.imprimirTokens()
-
-    if len(lexer.tokens)>0:
-        lexer.imprimeErro(lexer.tokens[-1])
-
-    texto = "6️⃣"
+    
+    lexer.imprimeErroSeTiver()
