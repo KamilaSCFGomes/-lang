@@ -1,4 +1,5 @@
 import re
+from token import Token
 
 def ehNumero(numero):
     try:
@@ -79,17 +80,6 @@ PALAVRAS_RESERVADAS = {
 }
 
 ALGARISMOS = ["0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "⏺️"]
-
-class Token:
-    def __init__(self, token, classe, tipo, linha, coluna):
-        self.token = token
-        self.classe = classe
-        self.tipo = tipo
-        self.linha = linha
-        self.coluna = coluna
-
-    def representa(self):
-        return f"{self.classe},\t{self.tipo},\t{self.token},\t{self.linha}, {self.coluna}"
 
 class Ponteiro:
     def __init__(self, posicao=0, linha=1, coluna=1):
@@ -208,7 +198,6 @@ class Lexer:
                     self.adicionaErro("COMENTARIO LONGO NAO FECHADO")
                     return True
 
-            #self.batedor.avancar()
             if(self.codigo[self.batedor.posicao] == '\n'):
                     self.batedor.proximaLinha()
             # print(f"comentario: [{self.codigo[self.pivo.posicao:self.batedor.posicao]}]")
