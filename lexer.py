@@ -227,6 +227,8 @@ class Lexer:
                     self.batedor.proximaLinha()
 
             self.adicionaToken(self.codigo[self.pivo.posicao:self.batedor.posicao], "LITERAL", "TEXTO", self.pivo.linha, self.pivo.coluna)
+            self.batedor.posicao-=1
+            self.batedor.coluna-=1
             self.pivo.copiaPonteiro(self.batedor)
             return True
 
