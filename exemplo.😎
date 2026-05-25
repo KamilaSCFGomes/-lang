@@ -1,16 +1,16 @@
 🚀
 {
-📦🤏🔢 x 👉 ⏺️1️⃣0️⃣;
-📦🤏🔢 y 👉 ⏺️2️⃣;
+📦🤏🔢 x 👉 ⏺️1️⃣0️⃣
+📦🤏🔢 y 👉 ⏺️2️⃣
 
 💭 teste de operacoes
-📦🔢 😭 👉 x ➕ y;
-📦🔢 🍕 👉 x ✖️ y;
+📦🔢 😭 👉 x ➕ y
+📦🔢 🍕 👉 x ✖️ y
 
 ❓(x ⬆️ y 🤞 ⭕){
-    🖨️(💬x maior que y💬);
+    🖨️(💬x maior que y💬)
 }❗{
-    🖨️(💬x menor ou igual a y💬);
+    🖨️(💬x menor ou igual a y💬)
 }
 
 🫃comentario
@@ -18,12 +18,12 @@ longo
 👶
 
 🔁(📦🔢 i 👉 ⏺️0️⃣ : i ⬇️ ⏺️5️⃣ : i 👉 i ➕ ⏺️1️⃣){
-    🖨️(i);
+    🖨️(i)
 }
 
-💬 string
-com várias
-linhas 💬
+🖨️( a ➕a )
+
+😭 👉 a
 
 }
 🏁

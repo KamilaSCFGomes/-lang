@@ -1,4 +1,5 @@
-from token import Token    
+from token_classe import Token
+import ArvoreSintatica as ast
 
 TIPOS = {"INT", "FLOAT", "STRING", "CHAR", "BOOLEANO"}
 FUNCOES = {"PRINT", "SCAN"}
@@ -6,16 +7,38 @@ FUNCOES = {"PRINT", "SCAN"}
 class Sintatico:
     def __init__(self, tokens):
         self.tokens = tokens
-        self.analise = []
+        self.erros = []
+        self.arvore = ast.No
+
+    def imprimeArvore(self, level=0):
+        ast.print_ast(self.arvore, level)
     
     def imprimeTipoAtual(self): # para debug
         print(self.tokens[0].tipo)
+    
+    def tipoAtual(self):
+        return self.tokens[0].tipo
 
-    def adicionaAnalise(self, tipo="Nao especificado"):
-        self.analise.append([tipo, self.tokens[0].linha, self.tokens[0].coluna])
+    def valorAtual(self):
+        return self.tokens[0].token
 
-    def imprimeErro(self, tipo="NAO ESPECIFICADO"):
-        self.adicionaAnalise(f"Erro: {tipo}")
+    def noValorAtual(self):
+        if self.matchTipo("NUMERAL"):
+            return ast.Numero(self.valorAtual())
+        if self.matchTipo("IDENTIFICADOR"):
+            return ast.Identificador(self.valorAtual())
+        if self.matchTipo("BOOLEANO"):
+            return ast.Booleano(self.valorAtual())
+        if self.matchTipo("TEXTO"):
+            return ast.String(self.valorAtual())
+        
+        return False
+
+    def adicionaErro(self, tipo="Nao especificado"):
+        self.erros.append([tipo, self.tokens[0].linha, self.tokens[0].coluna])
+
+    def erro(self, tipo="NAO ESPECIFICADO"):
+        self.adicionaErro(f"Erro: {tipo}")
         print("⚠️  Erro Sintático!⚠️   ", tipo, " 📍 ↔️ ", self.tokens[0].linha, ",↕️ ", self.tokens[0].coluna)
         return
     
@@ -31,150 +54,323 @@ class Sintatico:
     def pop(self):
         self.tokens.pop(0)
 
+    def ehValor(self):
+        return self.matchClasse("LITERAL") or self.matchClasse("BOOLEANO") or self.matchClasse("IDENTIFICADOR")
+
+    def panic_mode(self):
+        linha_atual = self.tokens[0].linha
+        
+        while(len(self.tokens) > 0 and not self.matchTipo("FIM")):
+            # token seguro:
+            if self.matchTipo("FECHA_CHAVE") or self.matchTipo("PONTO_VIRGULA") or self.matchTipo("FECHA_PARENTESES"):
+                return
+            
+            # inicio de outra funcao:
+            if self.matchGrupo(FUNCOES):
+                return
+            
+            # inicio de outra linha:
+            if self.tokens[0].linha != linha_atual:
+                return
+            
+            self.pop()
+
+    def panic_parenteses(self):
+        while(len(self.tokens) > 0 and not self.matchTipo("FIM")):
+            # token seguro:
+            if self.matchTipo("FECHA_CHAVE") or self.matchTipo("ABRE_CHAVE") or self.matchTipo("FECHA_PARENTESES"):
+                return
+            
+            self.pop()
+            
 
 
     def bloco(self):
         if self.matchTipo("ABRE_CHAVE"):
-            self.adicionaAnalise("Bloco")
             self.pop()
 
-            return self.bloco_()
+            arvore = ast.Bloco(self.bloco_())
+            return arvore
             
         return False
         
     def bloco_(self):
+        self.imprimeTipoAtual()
+
         if self.matchTipo("FECHA_CHAVE"):
             self.pop()
-            return True
+            return []
         
         if self.matchGrupo(TIPOS):
-            if not self.declaracao(): return False
-            return self.bloco_()
+            novos = self.declaracao()
+            if not novos: return self.bloco_()
+            return novos + self.bloco_()
         
         if self.matchTipo("IF"):
-            if not self.condicao(): return False
-            return self.bloco_()
+            cond = self.condicao()
+            if not cond: return self.bloco_()
+            return [cond] + self.bloco_()
+
+        if self.matchTipo("FOR"):
+            loop = self.loop()
+            if not loop: return self.bloco_()
+            return [loop] + self.bloco_()
+        
+        if self.matchGrupo("IDENTIFICADOR"):
+            atri = self.atribuicao()
+            if not atri: return self.bloco_()
+            return [atri] + self.bloco_()
         
         if self.matchGrupo(FUNCOES):
-            if not self.funcao(): return False
-            return self.bloco_()
+            funcao = self.funcao()
+            if not funcao: return self.bloco_()
+            return [funcao] + self.bloco_()
 
-        self.imprimeErro("COMANDO NAO IDENTIFICADO")
-        return False
+        self.erro("COMANDO NAO IDENTIFICADO")
+        self.panic_mode()
+        return []
 
-
-    def valores(self):
-        if self.matchClasse("LITERAL") or self.matchClasse("BOOLEANO") or self.matchClasse("IDENTIFICADOR"):
-            self.pop()
-            return True
-        else:
-            return False
 
     def parametros(self):
-        if not self.valores():
-            self.imprimeErro("PARAMETROS MAL FORMATADOS")
-            return False
-        return self.parametros_()
-    
-    def parametros_(self):
+        if self.matchTipo("FECHA_PARENTESES"):
+            return []
+        
+        valor = self.expressao()
+        if not valor:
+            self.erro("PARAMETROS MAL FORMATADOS")
+            self.panic_mode()
+            return []
+                
         if self.matchTipo("VIRGULA"):
             self.pop()
-            return self.parametros()
-        return True # vazio
+            return [valor] + self.parametros()
+        
+        if self.matchTipo("ABRE_CHAVE") or self.matchTipo("FECHA_CHAVE"):
+            self.erro("PARAMETROS MAL FORMATADOS")
+        
+        return [valor]
 
 
     def funcao(self):
         if not self.matchGrupo(FUNCOES): return False
-        self.adicionaAnalise("Função")
+        nome = self.valorAtual()
         self.pop()
 
-        if not self.matchTipo("ABRE_PARENTESES"):
-            self.imprimeErro("FUNCAO SEM PARAMETROS")
-            return False
+        if not self.matchTipo("ABRE_PARENTESES") and not self.matchTipo("FECHA_PARENTESES"):
+            self.erro("FUNCAO SEM PARAMETROS")
+            return []
         self.pop()
 
-        if not self.parametros():
-            self.imprimeErro("PARAMETROS DE FUNCAO MAL FORMATADOS")
-            return False
+        parametros = self.parametros()
         
         if not self.matchTipo("FECHA_PARENTESES"):
-            self.imprimeErro("PARAMETROS NAO FECHADOS")
-            return False
-        self.pop()
+            self.erro("PARAMETROS MAL FORMATADOS")
+            self.panic_mode()
+            
+        if self.matchTipo("FECHA_PARENTESES"): self.pop()
+        self.imprimeTipoAtual()
 
-        if not self.matchTipo("PONTO_VIRGULA"):
-            self.imprimeErro("DECLARACOA MAL FORMADA")
-            return False
-        self.pop()
-        
-        return True
+        return ast.ChamadaFuncao(nome, parametros)
+    
 
     def condicao(self):
         if not self.matchTipo("IF"): return False
-        self.adicionaAnalise("Condição")
         self.pop()
+        
+        return self.condicao_()
 
-        return self.condicao_() and self.condicao_elif() and self.condicao_else()
-    
     def condicao_(self):
+        condicao = self.condicao_cond()
+        if not condicao: 
+            return []
+        
+        cond_then = self.bloco()
+        if not cond_then:
+            return []
+
+        cond_else = self.condicao_else()
+
+        return ast.Condicao(condicao, cond_then, cond_else)
+
+
+    def condicao_cond(self):
         if not self.matchTipo("ABRE_PARENTESES"):
-            self.imprimeErro("FALTA EXPRESSAO APOS CONDICAO")
+            self.erro("CONDICAO MAL FORMADA. ESPERAVA (")
             return False
         self.pop()
 
-        if not self.expressao(): return False
+        condicao = self.expressao()
+        if not condicao: return False
 
         if not self.matchTipo("FECHA_PARENTESES"):
-            self.imprimeErro("EXPRESSAO NAO FECHADA EM CONDICAO")
+            self.erro("CONDICAO MAL FORMADA. ESPERAVA )")
+            self.panic_parenteses()
+            return condicao
+        self.pop()
+
+        return condicao
+    
+    def condicao_else(self):
+        if self.matchTipo("ELIF"):
+            self.pop()
+            return ast.Bloco([self.condicao_()])
+        
+        if self.matchTipo("ELSE"):
+            self.pop()
+
+            if not self.matchTipo("ABRE_CHAVE"):
+                self.erro("BLOCO ELSE FALTANTE")
+                return False
+            
+            return self.bloco()
+        
+        else: return True
+
+    def loop(self):
+        if not self.matchTipo("FOR"):
+            return False
+        self.pop()
+        
+        if not self.matchTipo("ABRE_PARENTESES"):
+            self.erro("ESTRUTURA DE REPETICAO MAL FORMATADA. ESPERAVA (")
             return False
         self.pop()
 
-        return self.bloco()
-    
-    def condicao_elif(self):
-        if self.matchTipo("ELIF"):
-            self.adicionaAnalise("Else if")
-            self.pop()
-            return self.condicao_() and self.condicao_elif()
-        else:
-            return True # vazio
+        loop1=self.loop1()
+        loop2=self.loop2()
+        loop3=self.loop3()
 
-    def condicao_else(self):
-        if self.matchTipo("ELSE"):
-            self.adicionaAnalise("Else")
+        if not (loop1 and loop2 and loop3):
+            self.erro("ESTRUTURA DE REPETICAO COM PARAMETROS MAL FORMATADOS")
+            return False
+
+        if not self.matchTipo("FECHA_PARENTESES"):
+            self.erro("ESTRUTURA DE REPETICAO MAL FORMATADA. ESPERAVA )")
+            return False
+        self.pop()
+
+        corpo = self.bloco()
+        if not corpo: return False
+
+        corpo = ast.Bloco(loop1 + corpo.statements + loop3)
+        return ast.Loop(loop2, corpo)
+
+    def loop1(self):
+        if self.matchTipo("DOIS_PONTOS"):
             self.pop()
-            return self.bloco()
-        else:
-            return True # vazio
+            return []
+        
+        elif self.matchGrupo(TIPOS):
+            decl = self.declaracao()
+            if not decl: return [False]
+            return decl + self.loop1()
+        
+        elif self.matchGrupo(FUNCOES):
+            fun = self.funcao()
+            if not fun: return [False]
+            return [fun] + self.loop1()
+        
+        elif self.matchTipo("PONTO_VIRGULA"):
+            self.pop()
+            return self.loop1()
+        
+        return [False]
+    
+    def loop2(self):
+        if self.matchTipo("DOIS_PONTOS"):
+            self.pop()
+            return []
+        
+        elif self.ehValor():
+            expr = self.expressao()
+            if not expr: return False
+            return [expr] + self.loop2()
+        
+        elif self.matchGrupo(FUNCOES):
+            fun = self.funcao()
+            if not fun: return False
+            return [fun] + self.loop2()
+        
+        return False
+
+    def loop3(self):
+        if self.matchTipo("FECHA_PARENTESES"):
+            return []
+        
+        elif self.ehValor():
+            expr = self.atribuicao()
+            if not expr: return False
+            return [expr] + self.loop3()
+        
+        elif self.matchGrupo(FUNCOES):
+            fun = self.funcao()
+            if not fun: return False
+            return [fun] + self.loop3()
+        
+        elif self.matchTipo("PONTO_VIRGULA"):
+            self.pop()
+            return self.loop3()
+        
+        return False
+
 
     def declaracao(self):
+        if not self.matchGrupo(TIPOS):
+            return False
+        tipo = self.tipoAtual()
+        self.pop()
+
+        if not self.matchTipo("IDENTIFICADOR"):
+            self.erro("DECLARACAO MAL FORMATADA. IDENTIFICADOR ESPERADO")
+            return False
+        nome = self.valorAtual()
+        comandos = []
+        comandos.append(ast.Declaracao(ast.Identificador(nome), ast.Tipo(tipo)))
+        self.pop()
+
+        if self.matchTipo("ATRIBUICAO"):
+            self.pop()
+            valor = self.expressao()
+            comandos.append(ast.Atribuicao(ast.Identificador(nome), valor))
+        
+        if self.matchTipo("VIRGULA"):
+            self.pop()
+            novos = self.declaracao()
+            comandos.append(novos)
+
+        return comandos
+
+
+
+    def declaracao_(self):
         if not self.matchGrupo(TIPOS): return False
         self.adicionaAnalise("Declaração de variável")
         self.pop()
 
         if not self.matchClasse("IDENTIFICADOR"):
-            self.imprimeErro("DECLARACAO MAL FORMATADA")
+            self.erro("DECLARACAO MAL FORMATADA")
             return False
         self.pop()
 
-        if not self.declaracao_(): return False # atribuicao
+        if not self.atribuicao(): return False # atribuicao
         if not self.declaracao__(): return False # varias variaveis
-        
-        if not self.matchTipo("PONTO_VIRGULA"):
-            self.imprimeErro("DECLARACAO MAL FORMATADA")
-            return False
-        self.pop()
 
         return True
         
-    def declaracao_(self):
-        if self.matchTipo("ATRIBUICAO"):
-            self.adicionaAnalise("Atribuição de variável")
-            self.pop()
+    def atribuicao(self):
+        if not self.matchGrupo("IDENTIFICADOR"):
+            return False
+        nome = self.valorAtual()
+        self.pop()
 
-            return self.expressao()
+        if not self.matchTipo("ATRIBUICAO"):
+            self.erro("ATRIBUICAO MAL FORMATADA - ATRIBUICAO ESPERADA")
+            return False
+        self.pop()
 
-        return True # vazio
+        valor = self.expressao()
+        return ast.Atribuicao(ast.Identificador(nome), valor)
+
         
     def declaracao__(self):
         if self.matchTipo("VIRGULA"):
@@ -182,117 +378,179 @@ class Sintatico:
             self.pop()
 
             if not self.matchClasse("IDENTIFICADOR"):
-                self.imprimeErro("DECLARACAO MAL FORMATADA")
+                self.erro("DECLARACAO MAL FORMATADA")
                 return False
             self.pop()
 
-            if not self.declaracao_(): return False # atribuicao
+            if not self.atribuicao(): return False # atribuicao
             if not self.declaracao__(): return False # varias variaveis
 
         return True # vazio
 
 
     def expressao(self):
-        self.adicionaAnalise("Expressão")
-        return self.expressao_1()
+        no = self.expressao1()
+        return no
     
-    def expressao_1(self):
-        return self.expressao_2() and self.expressao_1_()
-    
-    def expressao_1_(self):
-        if self.matchTipo("OR"):
+    def expressao1(self):
+        esquerda = self.expressao2()
+        if not esquerda: return False
+
+        operador = self.tipoAtual()
+        if operador=="OR":
             self.pop()
-            return self.expressao_2() and self.expressao_1_()
-        else: return True # vazio
+
+            direita = self.expressao2()
+            if not direita: return False
+
+
+            return ast.OperacaoBin(operador, esquerda, direita)
+        return esquerda
     
-    def expressao_2(self):
-        return self.expressao_3() and self.expressao_2_()
-    
-    def expressao_2_(self):
-        if self.matchTipo("AND"):
+    def expressao2(self):
+        esquerda = self.expressao3()
+        if not esquerda: return False
+
+        operador = self.tipoAtual()
+        if operador=="AND":
             self.pop()
-            return self.expressao_3() and self.expressao_2_()
-        else: return True # vazio
+
+            direita = self.expressao3()
+            if not direita: return False
+
+
+            return ast.OperacaoBin(operador, esquerda, direita)
+        return esquerda
     
-    def expressao_3(self):
-        return self.expressao_4() and self.expressao_3_()
-    
-    def expressao_3_(self):
-        if self.matchTipo("NAO"):
+    def expressao3(self):
+        esquerda = self.expressao4()
+        if not esquerda: return False
+
+        operador = self.tipoAtual()
+        if operador=="IGUAL" or operador=="DIFERENTE":
             self.pop()
-            return self.expressao_4() and self.expressao_3_()
-        else: return True # vazio
+
+            direita = self.expressao4()
+            if not direita: return False
+
+
+            return ast.OperacaoBin(operador, esquerda, direita)
+        return esquerda
     
-    def expressao_4(self):
-        return self.expressao_5() and self.expressao_4_()
-    
-    def expressao_4_(self):
-        if self.matchTipo("IGUAL") or self.matchTipo("MAIOR") or self.matchTipo("MENOR"):
+    def expressao4(self):
+        esquerda = self.expressao5()
+        if not esquerda: return False
+
+        operador = self.tipoAtual()
+        if operador=="MAIOR" or operador=="MENOR" or operador=="MAIOR_IGUAL" or operador=="MENOR_IGUAL":
             self.pop()
-            return self.expressao_5() and self.expressao_4_()
-        else: return True # vazio
+
+            direita = self.expressao5()
+            if not direita: return False
+
+
+            return ast.OperacaoBin(operador, esquerda, direita)
+        return esquerda
     
-    def expressao_5(self):
-        return self.expressao_6() and self.expressao_5_()
-    
-    def expressao_5_(self):
-        if self.matchTipo("MAIS") or self.matchTipo("MENOS"):
+    def expressao5(self):
+        esquerda = self.expressao6()
+        if not esquerda: return False
+
+        operador = self.tipoAtual()
+        if operador=="MAIS" or operador=="MENOS":
             self.pop()
-            return self.expressao_6() and self.expressao_5_()
-        else: return True # vazio
+
+            direita = self.expressao6()
+            if not direita: return False
+
+
+            return ast.OperacaoBin(operador, esquerda, direita)
+        return esquerda
     
-    def expressao_6(self):
-        return self.expressao_7() and self.expressao_6_()
-    
-    def expressao_6_(self):
-        if self.matchTipo("VEZES") or self.matchTipo("DIVIDIDO") or self.matchTipo("RESTO"):
+    def expressao6(self):
+        esquerda = self.expressao7()
+        if not esquerda: return False
+
+        operador = self.tipoAtual()
+        if operador=="VEZES" or operador=="DIVIDIDO" or operador=="RESTO":
             self.pop()
-            return self.expressao_7() and self.expressao_6_()
-        else: return True # vazio
+
+            direita = self.expressao7()
+            if not direita: return False
+
+
+            return ast.OperacaoBin(operador, esquerda, direita)
+        return esquerda
     
-    def expressao_7(self):
-        return self.expressao_8() and self.expressao_7_()
-    
-    def expressao_7_(self):
-        if self.matchTipo("POTENCIA"):
+    def expressao7(self):
+        esquerda = self.expressao8()
+        if not esquerda: return False
+
+        operador = self.tipoAtual()
+        if operador=="VEZES" or operador=="DIVIDIDO" or operador=="RESTO":
             self.pop()
-            return self.expressao_8() and self.expressao_7_()
-        else: return True # vazio
+
+            direita = self.expressao8()
+            if not direita: return False
+
+
+            return ast.OperacaoBin(operador, esquerda, direita)
+        return esquerda
     
-    def expressao_8(self):
+    def expressao8(self):
+        operador = self.tipoAtual()
+        if operador=="NAO" or operador=="MENOS" or operador=="MENOS1" or operador=="MAIS1":
+            self.pop()
+
+            direita = self.expressao9()
+            if not direita: return False
+
+
+            return ast.OperacaoUn(operador, direita)
+        
+        return self.expressao9()
+    
+    def expressao9(self):
         if self.matchTipo("ABRE_PARENTESES"):
             self.pop()
-            if not self.expressao_1(): return False
-            if self.matchTipo("FECHA_PARENTESES"):
-                self.pop()
-                return True
-            return False
-        return self.expressao_a()
+            no = self.expressao1()
 
-    def expressao_a(self):
-        if self.valores():
-            return True
-        self.imprimeErro("EXPRESSAO MAL FORMATADA")
+            if no:
+                if self.matchTipo("FECHA_PARENTESES"):
+                    self.pop()
+                    return no
+            self.erro("EXPRESSAO MAL FORMULADA OU FALTANTE")
+            return False
+        
+        if self.ehValor():
+            no = self.noValorAtual()
+            self.pop()
+            return no
+        
+        self.erro("EXPRESSAO MAL FORMULADA")
         return False
-    
+
 
 
     def programa(self):
         # inicio, bloco(s), fim
         if not self.matchTipo("INICIO"):
-            self.imprimeErro("SEM TOKEN DE INICIO DE PROGRAMA")
+            self.erro("SEM TOKEN DE INICIO DE PROGRAMA")
             return False
-        self.adicionaAnalise("Inicio do código")
         self.pop()
-        
-        if not self.bloco(): return False
+
+
+        codigo = self.bloco()
+        if not codigo: return False
+        self.arvore=codigo
 
         if not self.matchTipo("FIM"):
-            self.imprimeErro("SEM TOKEN DE FIM DE PROGRAMA")
+            self.erro("SEM TOKEN DE FIM DE PROGRAMA")
             return False
         self.pop()
         
-        return True
+        return codigo
 
     def analiseSintatica(self):
         return self.programa()
+        

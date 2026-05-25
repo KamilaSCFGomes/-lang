@@ -1,5 +1,5 @@
 import re
-from token import Token
+from token_classe import Token
 
 def ehNumero(numero):
     try:
@@ -11,14 +11,25 @@ def ehNumero(numero):
 
 OPERADORES = {
     "➕" : ["OPERADOR", "MAIS"],
+    "➕➕" : ["OPERADOR", "MAIS1"],
+    "➕👉" : ["OPERADOR", "MAIS_IGUAL"],
     "➖" : ["OPERADOR", "MENOS"],
+    "➖➖" : ["OPERADOR", "MENOS1"],
+    "➖👉" : ["OPERADOR", "MENOS_IGUAL"],
     "✖️" : ["OPERADOR", "VEZES"],
+    "✖️👉" : ["OPERADOR", "VEZES_IGUAL"],
     "➗" : ["OPERADOR", "DIVIDIDO"],
+    "➗👉" : ["OPERADOR", "DIVIDIDO_IGUAL"],
     "〰️" : ["OPERADOR", "RESTO"],
+    "〰️👉" : ["OPERADOR", "RESTO_IGUAL"],
     "↗️" : ["OPERADOR", "POTENCIA"],
+    "↗️👉" : ["OPERADOR", "POTENCIA_IGUAL"],
     "🟰" : ["OPERADOR", "IGUAL"],
+    "🚫🟰" : ["OPERADOR", "DIFERENTE"],
     "⬆️" : ["OPERADOR", "MAIOR"],
+    "⬆️🟰" : ["OPERADOR", "MAIOR_IGUAL"],
     "⬇️" : ["OPERADOR", "MENOR"],
+    "⬇️🟰" : ["OPERADOR", "MENOR_IGUAL"],
     "🚫" : ["OPERADOR", "NAO"],
     "🤞" : ["OPERADOR", "AND"],
     "✌️" : ["OPERADOR", "OR"],
@@ -55,8 +66,8 @@ LITERAIS = {
 }
 
 BOOLEANO = {
-    "⭕" : ["BOOLEANO", "VERDADEIRO"],
-    "❌" : ["BOOLEANO", "FALSO"]
+    "⭕" : ["LITERAL", "BOOLEANO"],
+    "❌" : ["LITERAL", "BOOLEANO"]
 }
 
 PALAVRAS_RESERVADAS = {
@@ -268,7 +279,7 @@ class Lexer:
     def verificaBooleano(self, token):
         resultado = BOOLEANO.get(token)
         if resultado!=None:
-            self.adicionaToken(token, resultado[0], resultado[1], self.pivo.linha, self.pivo.coluna)
+            self.adicionaToken(token=="⭕", resultado[0], resultado[1], self.pivo.linha, self.pivo.coluna)
             return True
 
         return False
