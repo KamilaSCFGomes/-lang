@@ -17,3 +17,5 @@ with open('exemplo.😎', 'r') as f:
     parser = si.Sintatico(lexer.retornaTokens())
     sucesso = parser.analiseSintatica()
     parser.imprimeArvore()
+    parser.imprimeErros()
+    print("sucesso? ", sucesso)

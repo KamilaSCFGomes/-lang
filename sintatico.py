@@ -22,23 +22,27 @@ class Sintatico:
     def valorAtual(self):
         return self.tokens[0].token
 
+    def posAtual(self):
+        return [self.tokens[0].linha, self.tokens[0].coluna]
+
     def noValorAtual(self):
         if self.matchTipo("NUMERAL"):
-            return ast.Numero(self.valorAtual())
+            return ast.Numero(self.valorAtual(), self.posAtual())
         if self.matchTipo("IDENTIFICADOR"):
-            return ast.Identificador(self.valorAtual())
+            return ast.Identificador(self.valorAtual(), self.posAtual())
         if self.matchTipo("BOOLEANO"):
-            return ast.Booleano(self.valorAtual())
+            return ast.Booleano(self.valorAtual(), self.posAtual())
         if self.matchTipo("TEXTO"):
-            return ast.String(self.valorAtual())
+            return ast.String(self.valorAtual(), self.posAtual())
         
         return False
-
-    def adicionaErro(self, tipo="Nao especificado"):
-        self.erros.append([tipo, self.tokens[0].linha, self.tokens[0].coluna])
+    
+    def imprimeErros(self):
+        for erro in self.erros:
+            print("⚠️  Erro Sintático!⚠️   ", erro[0], " 📍 ↔️ ", erro[1], ",↕️ ", erro[2])
 
     def erro(self, tipo="NAO ESPECIFICADO"):
-        self.adicionaErro(f"Erro: {tipo}")
+        self.erros.append([f"Erro: {tipo}", self.tokens[0].linha, self.tokens[0].coluna])
         print("⚠️  Erro Sintático!⚠️   ", tipo, " 📍 ↔️ ", self.tokens[0].linha, ",↕️ ", self.tokens[0].coluna)
         return
     
@@ -62,11 +66,7 @@ class Sintatico:
         
         while(len(self.tokens) > 0 and not self.matchTipo("FIM")):
             # token seguro:
-            if self.matchTipo("FECHA_CHAVE") or self.matchTipo("PONTO_VIRGULA") or self.matchTipo("FECHA_PARENTESES"):
-                return
-            
-            # inicio de outra funcao:
-            if self.matchGrupo(FUNCOES):
+            if self.matchTipo("FECHA_CHAVE") or self.matchTipo("PONTO_VIRGULA") or self.matchTipo("FECHA_PARENTESES") or self.matchTipo("ABRE_CHAVE"):
                 return
             
             # inicio de outra linha:
@@ -76,20 +76,27 @@ class Sintatico:
             self.pop()
 
     def panic_parenteses(self):
+        linha_atual = self.tokens[0].linha
+        
         while(len(self.tokens) > 0 and not self.matchTipo("FIM")):
             # token seguro:
             if self.matchTipo("FECHA_CHAVE") or self.matchTipo("ABRE_CHAVE") or self.matchTipo("FECHA_PARENTESES"):
                 return
             
+            # inicio de outra linha:
+            if self.tokens[0].linha != linha_atual:
+                return
+
             self.pop()
             
 
 
     def bloco(self):
         if self.matchTipo("ABRE_CHAVE"):
+            pos = self.posAtual()
             self.pop()
 
-            arvore = ast.Bloco(self.bloco_())
+            arvore = ast.Bloco(self.bloco_(), pos)
             return arvore
             
         return False
@@ -100,6 +107,9 @@ class Sintatico:
         if self.matchTipo("FECHA_CHAVE"):
             self.pop()
             return []
+        
+        if self.matchTipo("ABRE_CHAVE"):
+            return [self.bloco()] + self.bloco_()
         
         if self.matchGrupo(TIPOS):
             novos = self.declaracao()
@@ -126,8 +136,21 @@ class Sintatico:
             if not funcao: return self.bloco_()
             return [funcao] + self.bloco_()
 
-        self.erro("COMANDO NAO IDENTIFICADO")
+        if self.matchTipo("ELSE") or self.matchTipo("ELIF"):
+            self.erro("BLOCO ELSE FORA DE CONDICAO")
+        else:
+            self.erro("COMANDO NAO IDENTIFICADO")
+
         self.panic_mode()
+
+        if self.matchTipo("FECHA_PARENTESES"):
+            self.erro("TOKEN INESPERADO. PARENTESES FECHADO SEM ABERTURA")
+            self.pop()
+            return self.bloco_()
+
+        if self.matchTipo("ABRE_CHAVE"):
+            return [self.bloco()] + self.bloco_()
+
         return []
 
 
@@ -138,9 +161,9 @@ class Sintatico:
         valor = self.expressao()
         if not valor:
             self.erro("PARAMETROS MAL FORMATADOS")
-            self.panic_mode()
+            self.panic_parenteses()
             return []
-                
+        
         if self.matchTipo("VIRGULA"):
             self.pop()
             return [valor] + self.parametros()
@@ -154,6 +177,7 @@ class Sintatico:
     def funcao(self):
         if not self.matchGrupo(FUNCOES): return False
         nome = self.valorAtual()
+        pos = self.posAtual()
         self.pop()
 
         if not self.matchTipo("ABRE_PARENTESES") and not self.matchTipo("FECHA_PARENTESES"):
@@ -164,13 +188,11 @@ class Sintatico:
         parametros = self.parametros()
         
         if not self.matchTipo("FECHA_PARENTESES"):
-            self.erro("PARAMETROS MAL FORMATADOS")
-            self.panic_mode()
-            
-        if self.matchTipo("FECHA_PARENTESES"): self.pop()
-        self.imprimeTipoAtual()
+            self.erro("PARAMETROS MAL FORMATADOS. ESPERAVA )")
 
-        return ast.ChamadaFuncao(nome, parametros)
+        if self.matchTipo("FECHA_PARENTESES"): self.pop()
+
+        return ast.ChamadaFuncao(nome, parametros, pos)
     
 
     def condicao(self):
@@ -180,17 +202,27 @@ class Sintatico:
         return self.condicao_()
 
     def condicao_(self):
+        pos = self.posAtual()
         condicao = self.condicao_cond()
-        if not condicao: 
-            return []
         
-        cond_then = self.bloco()
-        if not cond_then:
+        print('aaa')
+        self.imprimeTipoAtual()
+
+        cond_then = False
+
+        if not self.matchTipo("ABRE_CHAVE"):
+            self.erro("BLOCO THEN FALTANTE")
+        
+        else:
+            cond_then = self.bloco()
+            if not cond_then:
+                self.erro("BLOCO THEN FALTANTE")
+        
+        if not condicao and not cond_then:
             return []
 
         cond_else = self.condicao_else()
-
-        return ast.Condicao(condicao, cond_then, cond_else)
+        return ast.Condicao(condicao, cond_then, cond_else, pos)
 
 
     def condicao_cond(self):
@@ -200,11 +232,14 @@ class Sintatico:
         self.pop()
 
         condicao = self.expressao()
-        if not condicao: return False
-
+        if not condicao:
+            self.erro("CONDICAO MAL FORMADA OU FALTANTE")
+            
         if not self.matchTipo("FECHA_PARENTESES"):
             self.erro("CONDICAO MAL FORMADA. ESPERAVA )")
             self.panic_parenteses()
+            if self.matchTipo("FECHA_PARENTESES"):
+                self.pop()
             return condicao
         self.pop()
 
@@ -229,12 +264,27 @@ class Sintatico:
     def loop(self):
         if not self.matchTipo("FOR"):
             return False
+        pos = self.posAtual()
         self.pop()
         
         if not self.matchTipo("ABRE_PARENTESES"):
             self.erro("ESTRUTURA DE REPETICAO MAL FORMATADA. ESPERAVA (")
-            return False
+            panic_parenteses()
+            return []
         self.pop()
+
+        if self.ehValor():
+            loop1=[]
+            loop2=self.loop2()
+            loop3=[]
+            if self.matchTipo("DOIS_PONTOS"):
+                self.erro("CONDICAO MAL FORMATADA EM ESTRUTURA DE REPETICAO. ESPERAVA PARAMETRO UNICO.")
+                self.panic_parenteses()
+
+            elif not matchTipo("FECHA_PARENTESES"):
+                self.erro("ESTRUTURA DE REPETICAO MAL FORMATADA. ESPERAVA (")
+                self.panic_parenteses()
+
 
         loop1=self.loop1()
         loop2=self.loop2()
@@ -252,12 +302,15 @@ class Sintatico:
         corpo = self.bloco()
         if not corpo: return False
 
-        corpo = ast.Bloco(loop1 + corpo.statements + loop3)
-        return ast.Loop(loop2, corpo)
+        corpo = ast.Bloco(loop1 + corpo.statements + loop3, None)
+        return ast.Loop(loop2, corpo, pos)
 
     def loop1(self):
         if self.matchTipo("DOIS_PONTOS"):
             self.pop()
+            return []
+        
+        elif self.matchTipo("FECHA_PARENTESES"):
             return []
         
         elif self.matchGrupo(TIPOS):
@@ -318,6 +371,7 @@ class Sintatico:
         if not self.matchGrupo(TIPOS):
             return False
         tipo = self.tipoAtual()
+        pos = self.posAtual()
         self.pop()
 
         if not self.matchTipo("IDENTIFICADOR"):
@@ -325,13 +379,14 @@ class Sintatico:
             return False
         nome = self.valorAtual()
         comandos = []
-        comandos.append(ast.Declaracao(ast.Identificador(nome), ast.Tipo(tipo)))
+        comandos.append(ast.Declaracao(ast.Identificador(nome, None), ast.Tipo(tipo, None), pos))
         self.pop()
 
         if self.matchTipo("ATRIBUICAO"):
             self.pop()
+            pos = self.posAtual()
             valor = self.expressao()
-            comandos.append(ast.Atribuicao(ast.Identificador(nome), valor))
+            comandos.append(ast.Atribuicao(ast.Identificador(nome, None), valor, pos))
         
         if self.matchTipo("VIRGULA"):
             self.pop()
@@ -360,6 +415,7 @@ class Sintatico:
     def atribuicao(self):
         if not self.matchGrupo("IDENTIFICADOR"):
             return False
+        pos = self.posAtual()
         nome = self.valorAtual()
         self.pop()
 
@@ -369,7 +425,7 @@ class Sintatico:
         self.pop()
 
         valor = self.expressao()
-        return ast.Atribuicao(ast.Identificador(nome), valor)
+        return ast.Atribuicao(ast.Identificador(nome, None), valor, pos)
 
         
     def declaracao__(self):
@@ -408,6 +464,7 @@ class Sintatico:
         return esquerda
     
     def expressao2(self):
+        pos = self.posAtual()
         esquerda = self.expressao3()
         if not esquerda: return False
 
@@ -419,7 +476,7 @@ class Sintatico:
             if not direita: return False
 
 
-            return ast.OperacaoBin(operador, esquerda, direita)
+            return ast.OperacaoBin(operador, esquerda, direita, pos)
         return esquerda
     
     def expressao3(self):
@@ -438,6 +495,7 @@ class Sintatico:
         return esquerda
     
     def expressao4(self):
+        pos = self.posAtual()
         esquerda = self.expressao5()
         if not esquerda: return False
 
@@ -449,10 +507,11 @@ class Sintatico:
             if not direita: return False
 
 
-            return ast.OperacaoBin(operador, esquerda, direita)
+            return ast.OperacaoBin(operador, esquerda, direita, pos)
         return esquerda
     
     def expressao5(self):
+        pos = self.posAtual()
         esquerda = self.expressao6()
         if not esquerda: return False
 
@@ -464,7 +523,7 @@ class Sintatico:
             if not direita: return False
 
 
-            return ast.OperacaoBin(operador, esquerda, direita)
+            return ast.OperacaoBin(operador, esquerda, direita, pos)
         return esquerda
     
     def expressao6(self):
@@ -483,6 +542,7 @@ class Sintatico:
         return esquerda
     
     def expressao7(self):
+        pos = self.posAtual()
         esquerda = self.expressao8()
         if not esquerda: return False
 
@@ -494,7 +554,7 @@ class Sintatico:
             if not direita: return False
 
 
-            return ast.OperacaoBin(operador, esquerda, direita)
+            return ast.OperacaoBin(operador, esquerda, direita, pos)
         return esquerda
     
     def expressao8(self):
@@ -549,7 +609,7 @@ class Sintatico:
             return False
         self.pop()
         
-        return codigo
+        return not len(self.erros) > 0
 
     def analiseSintatica(self):
         return self.programa()
