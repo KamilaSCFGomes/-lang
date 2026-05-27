@@ -100,7 +100,7 @@ class PalavraReservada(No):
 
 
 def print_ast(no, level=0):
-    indentacao = "    " * level
+    indentacao = "     " * level
 
     print(f"{indentacao}{type(no).__name__}:", end="")
 

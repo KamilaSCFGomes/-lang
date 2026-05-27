@@ -18,4 +18,4 @@ with open('exemplo.😎', 'r') as f:
     sucesso = parser.analiseSintatica()
     parser.imprimeArvore()
     parser.imprimeErros()
-    print("sucesso? ", sucesso)
+    print(f"\n\nSucesso: {"Sim" if sucesso else "Não"}\n\n")
