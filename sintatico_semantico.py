@@ -1,5 +1,5 @@
 from token_classe import Token
-import ArvoreSintatica as ast
+import arvore_sintatica as ast
 
 TIPOS = {"INT", "FLOAT", "STRING", "CHAR", "BOOLEANO"}
 FUNCOES = {"PRINT", "SCAN"}
