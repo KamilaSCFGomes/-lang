@@ -1,5 +1,5 @@
 import lexer as le
-import sintatico as si
+import sintatico_semantico as si
 
 with open('exemplo.😎', 'r') as f:
     

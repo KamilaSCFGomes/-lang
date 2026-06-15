@@ -1,7 +1,7 @@
 from token_classe import Token
 import arvore_sintatica as ast
+import tabela_simbolos as tab
 
-TIPOS = {"INT", "FLOAT", "STRING", "CHAR", "BOOLEANO"}
 FUNCOES = {"PRINT", "SCAN"}
 
 class Sintatico:
@@ -113,7 +113,7 @@ class Sintatico:
         if self.matchTipo("ABRE_CHAVE"):
             return [self.bloco()] + self.bloco_()
         
-        if self.matchGrupo(TIPOS):
+        if self.matchGrupo(tab.TIPOS):
             novos = self.declaracao()
             if not novos: return self.bloco_()
             return novos + self.bloco_()
@@ -289,7 +289,7 @@ class Sintatico:
                 self.pop()
             return []
 
-        if self.matchGrupo(TIPOS) or self.matchTipo("DOIS_PONTOS"):
+        if self.matchGrupo(tab.TIPOS) or self.matchTipo("DOIS_PONTOS"):
             resul = self.loop_for()
             if not resul: return []
             resul.pos = pos
@@ -383,7 +383,7 @@ class Sintatico:
         if self.matchTipo("DOIS_PONTOS") or self.matchTipo("FECHA_PARENTESES"):
             return []
         
-        elif self.matchGrupo(TIPOS):
+        elif self.matchGrupo(tab.TIPOS):
             decl = self.declaracao()
             if not decl: return [False]
             return decl + self.loop_for_1()
@@ -430,7 +430,7 @@ class Sintatico:
 
 
     def declaracao(self):
-        if not self.matchGrupo(TIPOS):
+        if not self.matchGrupo(tab.TIPOS):
             return False
         tipo = self.tipoAtual()
         pos = self.posAtual()

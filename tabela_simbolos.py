@@ -1,0 +1,1 @@
+TIPOS = {"INT", "FLOAT", "STRING", "CHAR", "BOOLEANO"}
