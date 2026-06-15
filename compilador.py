@@ -13,9 +13,12 @@ with open('exemplo.😎', 'r') as f:
 
     print("\n\n")
 
-    print("\t\tANALISE SINTÁTICA:")
+    print("\t\tANALISE SINTÁTICA/SEMÂNTICA:")
     parser = si.Sintatico(lexer.retornaTokens())
     sucesso = parser.analiseSintatica()
+
     parser.imprimeArvore()
+    print("\n")
     parser.imprimeErros()
-    print(f"\n\nSucesso: {"Sim" if sucesso else "Não"}\n\n")
+    parser.imprimeWarnings()
+    print(f"\n\nSucesso: {"Sim" if sucesso else "Não"}\n")
