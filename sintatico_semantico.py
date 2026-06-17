@@ -10,7 +10,7 @@ class Sintatico:
         self.erros = []
         self.warnings = []
         self.arvore = ast.No
-        self.tabela_simbolos = tab.TABELA_SIMBOLOS
+        self.tabela_simbolos = tab.TabelaSimbolos()
 
     def imprimeArvore(self, level=0):
         ast.print_ast(self.arvore, level)
@@ -107,6 +107,7 @@ class Sintatico:
 
     def bloco(self):
         if self.matchTipo("ABRE_CHAVE"):
+            self.tabela_simbolos.abrir_escopo()
             pos = self.posAtual()
             self.pop()
 
@@ -116,13 +117,15 @@ class Sintatico:
         return False
         
     def bloco_(self):
-        # self.imprimeTipoAtual()
+        self.imprimeTipoAtual()
 
         if self.matchTipo("FECHA_CHAVE"):
+            self.tabela_simbolos.fechar_escopo()
             self.pop()
             return []
         
         if self.matchTipo("ABRE_CHAVE"):
+
             return [self.bloco()] + self.bloco_()
         
         if self.matchGrupo(tab.TIPOS):
@@ -157,6 +160,7 @@ class Sintatico:
         if self.matchTipo("ELSE") or self.matchTipo("ELIF"):
             self.erro("SINTATICO", "BLOCO ELSE FORA DE CONDICAO")
 
+        self.erro("SINTATICO", "TOKEN DESCONHECIDO")
         self.panic_mode()
 
         if self.matchTipo("FECHA_PARENTESES"):
@@ -485,79 +489,78 @@ class Sintatico:
         return ast.Atribuicao(ast.Identificador(nome, None), valor, pos)
 
 
-
     def expressao(self):
         no = self.expressao1()
         return no
-    
-    def expressao1(self):
-        esquerda = self.expressao2()
-        if not esquerda: return False
 
+    def expressao1(self): # atribuicao
+        ATRIBUICOES = {"MAIS_IGUAL": "MAIS", "MENOS_IGUAL": "MENOS", "VEZES_IGUAL": "VEZES", "DIVIDIDO_IGUAL": "DIVIDIDO", "POTENCIA_IGUAL": "POTENCIA"}
+        pos = self.posAtual()
+        esquerda = self.expressao2()
         operador = self.tipoAtual()
-        if operador=="OR":
+        direita = self.expressao1_()
+
+        if not direita: return esquerda
+        if operador != "ATRIBUICAO":
+                operador = ATRIBUICOES[operador]
+                direita = ast.OperacaoBin(operador, esquerda, direita, pos)
+                operador = "ATRIBUICAO"
+        return ast.OperacaoBin(operador, esquerda, direita, pos)
+
+    def expressao1_(self):
+        ATRIBUICOES = {"MAIS_IGUAL": "MAIS", "MENOS_IGUAL": "MENOS", "VEZES_IGUAL": "VEZES", "DIVIDIDO_IGUAL": "DIVIDIDO", "POTENCIA_IGUAL": "POTENCIA"}
+        pos = self.posAtual()
+        operador = self.tipoAtual()
+
+        if operador in ["ATRIBUICAO", "MAIS_IGUAL", "MENOS_IGUAL", "VEZES_IGUAL", "DIVIDIDO_IGUAL", "POTENCIA_IGUAL"]:
             self.pop()
 
-            direita = self.expressao2()
-            if not direita: return False
+            esquerda = self.expressao2()
+            direita = self.expressao1_()
+            if not direita: return esquerda
+            
+            if operador != "ATRIBUICAO":
+                operador = ATRIBUICOES[operador]
+                direita = ast.OperacaoBin(operador, esquerda, direita, pos)
+                operador = "ATRIBUICAO"
+            return ast.OperacaoBin("ATRIBUICAO", esquerda, direita, pos)
+            
+        return []
 
-
-            return ast.OperacaoBin(operador, esquerda, direita)
-        return esquerda
-    
-    def expressao2(self):
+    def expressao2(self): # ternario
         pos = self.posAtual()
         esquerda = self.expressao3()
-        if not esquerda: return False
-
         operador = self.tipoAtual()
-        if operador=="AND":
-            self.pop()
+        direita = self.expressao2_()
+        if direita: return ast.OperacaoBin(operador, esquerda, direita, pos)
+        else: return esquerda
 
-            direita = self.expressao3()
-            if not direita: return False
-
-
-            return ast.OperacaoBin(operador, esquerda, direita, pos)
-        return esquerda
-    
-    def expressao3(self):
-        esquerda = self.expressao4()
-        if not esquerda: return False
-
-        operador = self.tipoAtual()
-        if operador=="IGUAL" or operador=="DIFERENTE":
-            self.pop()
-
-            direita = self.expressao4()
-            if not direita: return False
-
-            return ast.OperacaoBin(operador, esquerda, direita)
-        return esquerda
-    
-    def expressao4(self):
+    def expressao2_(self):
         pos = self.posAtual()
-        esquerda = self.expressao5()
-        if not esquerda: return False
-
         operador = self.tipoAtual()
-        if operador=="MAIOR" or operador=="MENOR" or operador=="MAIOR_IGUAL" or operador=="MENOR_IGUAL":
-            self.pop()
 
-            direita = self.expressao5()
-            if not direita: return False
+        if operador != "MAIS":
+            return []
+        self.pop()
 
+        esquerda = self.expressao3()
+        direita = self.expressao2_()
+        if direita: return ast.OperacaoBin(operador, esquerda, direita, pos)
+        else: return esquerda
 
-            return ast.OperacaoBin(operador, esquerda, direita, pos)
-        return esquerda
+    def expressao3(self): # or
+        return self.expressao4()
     
-    def expressao5(self):
+    def expressao4(self): # and
+        return self.expressao5()
+    
+    def expressao5(self): # igual / diferente
         pos = self.posAtual()
         esquerda = self.expressao6()
         if not esquerda: return False
 
         operador = self.tipoAtual()
-        if operador=="MAIS" or operador=="MENOS":
+        if operador=="IGUAL" or operador=="DIFERENTE":
             self.pop()
 
             direita = self.expressao6()
@@ -567,28 +570,29 @@ class Sintatico:
             return ast.OperacaoBin(operador, esquerda, direita, pos)
         return esquerda
     
-    def expressao6(self):
+    def expressao6(self): # maior / menor
+        pos = self.posAtual()
         esquerda = self.expressao7()
         if not esquerda: return False
 
         operador = self.tipoAtual()
-        if operador=="VEZES" or operador=="DIVIDIDO" or operador=="RESTO":
+        if operador=="MAIOR" or operador=="MENOR" or operador=="MAIOR_IGUAL" or operador=="MENOR_IGUAL":
             self.pop()
 
             direita = self.expressao7()
             if not direita: return False
 
 
-            return ast.OperacaoBin(operador, esquerda, direita)
+            return ast.OperacaoBin(operador, esquerda, direita, pos)
         return esquerda
     
-    def expressao7(self):
+    def expressao7(self): # mais / menos
         pos = self.posAtual()
         esquerda = self.expressao8()
         if not esquerda: return False
 
         operador = self.tipoAtual()
-        if operador=="VEZES" or operador=="DIVIDIDO" or operador=="RESTO":
+        if operador=="MAIS" or operador=="MENOS":
             self.pop()
 
             direita = self.expressao8()
@@ -598,23 +602,40 @@ class Sintatico:
             return ast.OperacaoBin(operador, esquerda, direita, pos)
         return esquerda
     
-    def expressao8(self):
+    def expressao8(self): # vezes / dividido / resto
+        pos = self.posAtual()
+        esquerda = self.expressao9()
+        if not esquerda: return False
+
         operador = self.tipoAtual()
-        if operador=="NAO" or operador=="MENOS" or operador=="MENOS1" or operador=="MAIS1":
+        if operador=="VEZES" or operador=="DIVIDIDO" or operador=="RESTO":
             self.pop()
 
             direita = self.expressao9()
             if not direita: return False
 
 
-            return ast.OperacaoUn(operador, direita)
-        
-        return self.expressao9()
+            return ast.OperacaoBin(operador, esquerda, direita, pos)
+        return esquerda
     
-    def expressao9(self):
+    def expressao9(self): # unarios
+        pos = self.posAtual()
+        operador = self.tipoAtual()
+
+        if operador=="NAO":
+            self.pop()
+            
+            direita = self.expressao10()
+            if not direita: return False
+
+            return ast.OperacaoUn(operador, direita, pos)
+        
+        return self.expressao10()
+    
+    def expressao10(self): # parenteses
         if self.matchTipo("ABRE_PARENTESES"):
             self.pop()
-            no = self.expressao1()
+            no = self.expressao()
 
             if no:
                 if self.matchTipo("FECHA_PARENTESES"):
@@ -626,6 +647,7 @@ class Sintatico:
         if self.ehValor():
             no = self.noValorAtual()
             self.pop()
+            print("VALOR", no)
             return no
         
         self.erro("SINTATICO", "EXPRESSAO MAL FORMULADA")

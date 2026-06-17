@@ -82,11 +82,12 @@ TABELA_OPERACOES = {
     }    
 
 
-class TABELA_SIMBOLOS:
-    escopo_atual = 0
-    escopo_com_loop = 0
+class TabelaSimbolos:
 
-    tabela = {}
+    def __init__(self):
+        self.escopo_atual = 0
+        self.escopo_com_loop = 0
+        self.tabela = {}
 
     def adiciona_variavel(self, nome, categoria, tipo, pos):
         if self.tabela[nome]:
@@ -131,7 +132,7 @@ class TABELA_SIMBOLOS:
     def fechar_escopo(self, loop=False):
         warnings = []
 
-        for variavel in tabela:
+        for variavel in self.tabela:
             print("v:", variave['nome'], "esc:", variavel['escopo'])
             if variavel['escopo'] >= self.escopo_atual:
                 if not variavel['utilizada']:

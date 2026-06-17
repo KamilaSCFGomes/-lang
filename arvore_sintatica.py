@@ -49,6 +49,14 @@ class OperacaoUn(No):
     pos: Optional[[]]
 
 @dataclass
+class OperacaoTer(No):
+    operador: str
+    esquerda: No
+    centro: No
+    direita: No
+    pos: Optional[[]]
+
+@dataclass
 class Atribuicao(No):
     alvo: Identificador
     valor: No

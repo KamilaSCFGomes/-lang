@@ -11,17 +11,14 @@ def ehNumero(numero):
 
 OPERADORES = {
     "➕" : ["OPERADOR", "MAIS"],
-    "➕➕" : ["OPERADOR", "MAIS1"],
     "➕👉" : ["OPERADOR", "MAIS_IGUAL"],
     "➖" : ["OPERADOR", "MENOS"],
-    "➖➖" : ["OPERADOR", "MENOS1"],
     "➖👉" : ["OPERADOR", "MENOS_IGUAL"],
     "✖️" : ["OPERADOR", "VEZES"],
     "✖️👉" : ["OPERADOR", "VEZES_IGUAL"],
     "➗" : ["OPERADOR", "DIVIDIDO"],
     "➗👉" : ["OPERADOR", "DIVIDIDO_IGUAL"],
     "〰️" : ["OPERADOR", "RESTO"],
-    "〰️👉" : ["OPERADOR", "RESTO_IGUAL"],
     "↗️" : ["OPERADOR", "POTENCIA"],
     "↗️👉" : ["OPERADOR", "POTENCIA_IGUAL"],
     "🟰" : ["OPERADOR", "IGUAL"],
