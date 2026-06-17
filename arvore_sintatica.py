@@ -108,9 +108,9 @@ class PalavraReservada(No):
 
 
 def print_ast(no, level=0):
-    indentacao = "     " * level
+    indentacao = "      " * level
 
-    print(f"{indentacao}{type(no).__name__}:", end="")
+    print(f"{indentacao}└─ {type(no).__name__}:", end="")
 
     # Imprime a posição se existir e não for None
     if hasattr(no, 'pos') and getattr(no, 'pos') is not None:
@@ -123,12 +123,14 @@ def print_ast(no, level=0):
             continue
 
         if isinstance(value, No):
+            print(f"{indentacao}   └─ {key}:")
             print_ast(value, level + 1)
 
         elif isinstance(value, list):
+            print(f"{indentacao}   └─ {key}:")
             for item in value:
                 if isinstance(item, No):
                     print_ast(item, level + 1)
 
         else:
-            print(f"{indentacao}└─ {key}: {value}")
+            print(f"{indentacao}   └─ {key}: {value}")

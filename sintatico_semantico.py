@@ -3,12 +3,13 @@ import arvore_sintatica as ast
 import tabela_simbolos as tab
 
 FUNCOES = {"PRINT", "SCAN"}
-ATRIBUICOES = {
+CONVERSAO_DE_OPERADOR = {
     "MAIS_IGUAL": "MAIS",
     "MENOS_IGUAL": "MENOS",
     "VEZES_IGUAL": "VEZES",
     "DIVIDIDO_IGUAL": "DIVIDIDO",
-    "POTENCIA_IGUAL": "POTENCIA"}
+    "POTENCIA_IGUAL": "POTENCIA"
+    }
 
 class Sintatico:
     def __init__(self, tokens):
@@ -514,9 +515,9 @@ class Sintatico:
 
         if not direita: return esquerda
         if operador != "ATRIBUICAO":
-                operador = ATRIBUICOES[operador]
-                direita = ast.OperacaoBin(operador, esquerda, direita, pos)
-                operador = "ATRIBUICAO"
+            operador = CONVERSAO_DE_OPERADOR[operador]
+            direita = ast.OperacaoBin(operador, esquerda, direita, pos)
+            operador = "ATRIBUICAO"
         return ast.OperacaoBin(operador, esquerda, direita, pos)
 
     def expressao1_(self):
@@ -531,7 +532,7 @@ class Sintatico:
             if not direita: return esquerda
             
             if operador != "ATRIBUICAO":
-                operador = ATRIBUICOES[operador]
+                operador = CONVERSAO_DE_OPERADOR[operador]
                 direita = ast.OperacaoBin(operador, esquerda, direita, pos)
                 operador = "ATRIBUICAO"
             return ast.OperacaoBin("ATRIBUICAO", esquerda, direita, pos)
@@ -619,27 +620,120 @@ class Sintatico:
             self.pop()
 
             direita = self.expressao6()
-            nova_esquerda = ast.OperacaoBin(operador, esquerda, direita, pos)
+            nova_esquerda = ast.OperacaoBin("IGUAL", esquerda, direita, pos)
+
+            if operador == "DIFERENTE":
+                nova_esquerda = ast.OperacaoUn("NAO", nova_esquerda, pos)
             return self.expressao5_(nova_esquerda)
+
+        return esquerda
+    
+
+    def expressao6(self): # maior/menor
+        return self.expressao6_(self.expressao7())
+
+    def expressao6_(self, esquerda):
+        pos = self.posAtual()
+        
+        operador = self.tipoAtual()
+        if operador in ["MAIOR", "MENOR", "MAIOR_IGUAL", "MENOR_IGUAL"]:
+            self.pop()
+
+            direita = self.expressao7()
+
+            # converter todas as operações em MAIOR:
+            if operador in ["MAIOR_IGUAL", "MENOR"]:
+                nova_esquerda = ast.OperacaoBin("MAIOR", direita, esquerda, pos)
+            else:
+                nova_esquerda = ast.OperacaoBin("MAIOR", esquerda, direita, pos)
+
+            if operador in ["MAIOR_IGUAL", "MENOR_IGUAL"]:
+                nova_esquerda = ast.OperacaoUn("NAO", nova_esquerda, pos)
+
+            return self.expressao6_(nova_esquerda)
+        return esquerda
+    
+    
+    def expressao7(self): # mais/menos
+        return self.expressao7_(self.expressao8())
+
+    def expressao7_(self, esquerda):
+        pos = self.posAtual()
+        
+        operador = self.tipoAtual()
+        if operador in ["MAIS", "MENOS"]:
+            self.pop()
+
+            direita = self.expressao8()
+            nova_esquerda = ast.OperacaoBin(operador, esquerda, direita, pos)
+            return self.expressao7_(nova_esquerda)
+        return esquerda
+
+
+    def expressao8(self): # vezes/dividido/resto
+        return self.expressao8_(self.expressao9())
+
+    def expressao8_(self, esquerda):
+        pos = self.posAtual()
+        
+        operador = self.tipoAtual()        
+        if operador in ["VEZES", "DIVIDIDO", "RESTO"]:
+            self.pop()
+
+            direita = self.expressao9()
+            nova_esquerda = ast.OperacaoBin(operador, esquerda, direita, pos)
+            return self.expressao8_(nova_esquerda)
         
         return esquerda
 
 
-    def expressao9(self): # unarios
+    def expressao9(self): # potencia
+        pos = self.posAtual()
+        esquerda = self.expressao10()
+        operador = self.tipoAtual()
+        direita = self.expressao9_()
+
+        if not direita: return esquerda
+        return ast.OperacaoBin(operador, esquerda, direita, pos)
+
+    def expressao9_(self):
         pos = self.posAtual()
         operador = self.tipoAtual()
 
-        if operador=="NAO":
+        if operador == "POTENCIA":
             self.pop()
-            
-            direita = self.expressao10()
-            if not direita: return False
 
+            esquerda = self.expressao10()
+            direita = self.expressao9_()
+            if not direita: return esquerda
+            
+            return ast.OperacaoBin("ATRIBUICAO", esquerda, direita, pos)
+        return []
+
+
+    def expressao10(self): # unarios
+        pos = self.posAtual()
+        operador = self.tipoAtual()
+
+        if operador in ["MAIS_MAIS", "MENOS_MENOS", "NAO", "CAST_INT", "CAST_FLOAT", "CAST_STRING", "CAST_CHAR", "CAST_BOOLEANO", "MENOS"]:
+            self.pop()
+
+            direita = self.expressao10()
+
+            if operador == "MAIS_MAIS":
+                return ast.OperacaoBin("MAIS", direita, ast.Numero(1, None), pos)
+            
+            if operador == "MENOS_MENOS":
+                return ast.OperacaoBin("MENOS", direita, ast.Numero(1, None), pos)
+            
+            if operador == "MENOS":
+                return ast.OperacaoBin("VEZES", direita, ast.Numero(-1, None), pos)
+            
             return ast.OperacaoUn(operador, direita, pos)
         
-        return self.expressao10()
+        return self.expressao11()    
     
-    def expressao10(self): # parenteses
+    def expressao11(self): # parenteses/incremento-pos
         if self.matchTipo("ABRE_PARENTESES"):
             self.pop()
             no = self.expressao()
@@ -654,13 +748,24 @@ class Sintatico:
         if self.ehValor():
             no = self.noValorAtual()
             self.pop()
-            print("VALOR", no)
-            return no
+            return self.expressao11_(no)
         
         self.erro("SINTATICO", "EXPRESSAO MAL FORMULADA")
         return False
+    
+    def expressao11_(self, chamada):
+        if self.matchTipo("ABRE_PARENTESES"): # chamada de funcao
+            self.pop()
+            param = self.expressao()
+            if param:
+                if self.matchTipo("FECHA_PARENTESES"):
+                    self.pop()
+                    return ast.ChamadaFuncao(chamada, param, None)
+                self.erro("SINTATICO", "EXPRESSAO MAL FORMULADA OU FALTANTE")
+        # nao era chamada de funcao
+        return chamada
 
-
+        
 
     def programa(self):
         # inicio, bloco(s), fim

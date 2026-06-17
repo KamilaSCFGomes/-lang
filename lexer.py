@@ -11,8 +11,10 @@ def ehNumero(numero):
 
 OPERADORES = {
     "➕" : ["OPERADOR", "MAIS"],
+    "➕➕" : ["OPERADOR", "MAIS_MAIS"],
     "➕👉" : ["OPERADOR", "MAIS_IGUAL"],
     "➖" : ["OPERADOR", "MENOS"],
+    "➖➖" : ["OPERADOR", "MENOS_MENOS"],
     "➖👉" : ["OPERADOR", "MENOS_IGUAL"],
     "✖️" : ["OPERADOR", "VEZES"],
     "✖️👉" : ["OPERADOR", "VEZES_IGUAL"],
@@ -32,7 +34,12 @@ OPERADORES = {
     "✌️" : ["OPERADOR", "OR"],
     "❔" : ["OPERADOR", "TERNARIO1"],
     "❕" : ["OPERADOR", "TERNARIO2"],
-    "👉" : ["OPERADOR", "ATRIBUICAO"]
+    "👉" : ["OPERADOR", "ATRIBUICAO"],
+    "💪🔢" : ["OPERADOR", "CAST_INT"],
+    "💪🤏🔢" : ["OPERADOR", "CAST_FLOAT"],
+    "💪🔤" : ["OPERADOR", "CAST_STRING"],
+    "💪🤏🔤" : ["OPERADOR", "CAST_CHAR"],
+    "💪🔘" : ["OPERADOR", "CAST_BOOLEANO"]
 }
 
 SEPARADORES = {
