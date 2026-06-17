@@ -575,75 +575,56 @@ class Sintatico:
 
 
     def expressao3(self): # or
-        return self.expressao4()
-    
-    def expressao4(self): # and
-        return self.expressao5()
-    
-    def expressao5(self): # igual / diferente
-        pos = self.posAtual()
-        esquerda = self.expressao6()
-        if not esquerda: return False
+        return self.expressao3_(self.expressao4())
 
+    def expressao3_(self, esquerda):
+        pos = self.posAtual()
+        
         operador = self.tipoAtual()
-        if operador=="IGUAL" or operador=="DIFERENTE":
+        if operador == "OR":
+            self.pop()
+
+            direita = self.expressao4()
+            nova_esquerda = ast.OperacaoBin(operador, esquerda, direita, pos)
+            return self.expressao3_(nova_esquerda)
+        
+        return esquerda
+
+
+    def expressao4(self): # and
+        return self.expressao4_(self.expressao5())
+
+    def expressao4_(self, esquerda):
+        pos = self.posAtual()
+        
+        operador = self.tipoAtual()
+        if operador == "AND":
+            self.pop()
+
+            direita = self.expressao5()
+            nova_esquerda = ast.OperacaoBin(operador, esquerda, direita, pos)
+            return self.expressao4_(nova_esquerda)
+        
+        return esquerda
+
+
+    def expressao5(self): # igual/diferente
+        return self.expressao5_(self.expressao6())
+
+    def expressao5_(self, esquerda):
+        pos = self.posAtual()
+        
+        operador = self.tipoAtual()
+        if operador in ["IGUAL", "DIFERENTE"]:
             self.pop()
 
             direita = self.expressao6()
-            if not direita: return False
-
-
-            return ast.OperacaoBin(operador, esquerda, direita, pos)
+            nova_esquerda = ast.OperacaoBin(operador, esquerda, direita, pos)
+            return self.expressao5_(nova_esquerda)
+        
         return esquerda
-    
-    def expressao6(self): # maior / menor
-        pos = self.posAtual()
-        esquerda = self.expressao7()
-        if not esquerda: return False
-
-        operador = self.tipoAtual()
-        if operador=="MAIOR" or operador=="MENOR" or operador=="MAIOR_IGUAL" or operador=="MENOR_IGUAL":
-            self.pop()
-
-            direita = self.expressao7()
-            if not direita: return False
 
 
-            return ast.OperacaoBin(operador, esquerda, direita, pos)
-        return esquerda
-    
-    def expressao7(self): # mais / menos
-        pos = self.posAtual()
-        esquerda = self.expressao8()
-        if not esquerda: return False
-
-        operador = self.tipoAtual()
-        if operador=="MAIS" or operador=="MENOS":
-            self.pop()
-
-            direita = self.expressao8()
-            if not direita: return False
-
-
-            return ast.OperacaoBin(operador, esquerda, direita, pos)
-        return esquerda
-    
-    def expressao8(self): # vezes / dividido / resto
-        pos = self.posAtual()
-        esquerda = self.expressao9()
-        if not esquerda: return False
-
-        operador = self.tipoAtual()
-        if operador=="VEZES" or operador=="DIVIDIDO" or operador=="RESTO":
-            self.pop()
-
-            direita = self.expressao9()
-            if not direita: return False
-
-
-            return ast.OperacaoBin(operador, esquerda, direita, pos)
-        return esquerda
-    
     def expressao9(self): # unarios
         pos = self.posAtual()
         operador = self.tipoAtual()
