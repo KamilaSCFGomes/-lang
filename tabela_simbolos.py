@@ -96,15 +96,19 @@ class TabelaSimbolos:
         self.tabela[nome] = {"tipo": tipo, "categoria": categoria, "pos": pos, "escopo": escopo_atual, "utilizada": False}
         return True, ""
     
-    def adiciona_funcao(nome, categoria, params, tipo, pos):
+    def adiciona_funcao(self, nome, categoria, params, tipo, pos):
         if self.tabela[nome]:
             return False, f"Declaracao duplicada. {nome} ja foi declarado como {tabela[nome]['categoria']} {tabela[nome]['tipo']} em {tabela[nome]['pos']}"
         
         self.tabela[nome] = {"tipo": tipo, "categoria": categoria, "params": params, "pos": pos, "escopo": escopo_atual, "utilizada": False}
         return True, ""
     
+    def imprimir(self):
+        print(f"Escopo: {self.escopo_atual}\tEscopo com loop: {self.escopo_com_loop}")
+        print(self.tabela)
+    
 
-    def verifica_variavel(nome):
+    def verifica_variavel(self, nome):
         try:
             if self.tabela[nome]['categoria'] == "VARIAVEL":
                 return True, self.tabela[nome]['tipo']
@@ -113,7 +117,7 @@ class TabelaSimbolos:
         except:
             return False, f"Variavel {nome} nao declarada"
     
-    def verifica_funcao(nome, params):
+    def verifica_funcao(self, nome, params):
         try:
             if self.tabela[nome]['categoria'] == "FUNCAO":
                 for p in params:
@@ -133,7 +137,7 @@ class TabelaSimbolos:
         warnings = []
 
         for variavel in self.tabela:
-            print("v:", variave['nome'], "esc:", variavel['escopo'])
+            print("v:", variavel['nome'], "esc:", variavel['escopo'])
             if variavel['escopo'] >= self.escopo_atual:
                 if not variavel['utilizada']:
                     warnings.append(f"Variavel nao utilizada: {variavel['nome']}, declarada em {variavel['pos']}")

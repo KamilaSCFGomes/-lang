@@ -3,6 +3,12 @@ import arvore_sintatica as ast
 import tabela_simbolos as tab
 
 FUNCOES = {"PRINT", "SCAN"}
+ATRIBUICOES = {
+    "MAIS_IGUAL": "MAIS",
+    "MENOS_IGUAL": "MENOS",
+    "VEZES_IGUAL": "VEZES",
+    "DIVIDIDO_IGUAL": "DIVIDIDO",
+    "POTENCIA_IGUAL": "POTENCIA"}
 
 class Sintatico:
     def __init__(self, tokens):
@@ -57,7 +63,7 @@ class Sintatico:
     
     def warning(self, tipo="NAO ESPECIFICADO"):
         self.warnings.append([f"Warning: {tipo}", [self.tokens[0].linha, self.tokens[0].coluna]])
-        print(f"⚠️  Erro {categoria}!⚠️   {tipo} 📍 {[self.tokens[0].linha, self.tokens[0].coluna]}")
+        print(f"⚠️  Warning!⚠️   {tipo} 📍 {[self.tokens[0].linha, self.tokens[0].coluna]}")
         return
 
     def matchClasse(self, classe):
@@ -489,12 +495,18 @@ class Sintatico:
         return ast.Atribuicao(ast.Identificador(nome, None), valor, pos)
 
 
-    def expressao(self):
-        no = self.expressao1()
+
+    def expressao(self): # virgula
+        no = [self.expressao1()]
+
+        if self.tipoAtual() == "VIRGULA":
+            self.pop()
+            return no + self.expressao()
+
         return no
 
+
     def expressao1(self): # atribuicao
-        ATRIBUICOES = {"MAIS_IGUAL": "MAIS", "MENOS_IGUAL": "MENOS", "VEZES_IGUAL": "VEZES", "DIVIDIDO_IGUAL": "DIVIDIDO", "POTENCIA_IGUAL": "POTENCIA"}
         pos = self.posAtual()
         esquerda = self.expressao2()
         operador = self.tipoAtual()
@@ -508,7 +520,6 @@ class Sintatico:
         return ast.OperacaoBin(operador, esquerda, direita, pos)
 
     def expressao1_(self):
-        ATRIBUICOES = {"MAIS_IGUAL": "MAIS", "MENOS_IGUAL": "MENOS", "VEZES_IGUAL": "VEZES", "DIVIDIDO_IGUAL": "DIVIDIDO", "POTENCIA_IGUAL": "POTENCIA"}
         pos = self.posAtual()
         operador = self.tipoAtual()
 
@@ -527,26 +538,41 @@ class Sintatico:
             
         return []
 
+
     def expressao2(self): # ternario
         pos = self.posAtual()
         esquerda = self.expressao3()
-        operador = self.tipoAtual()
-        direita = self.expressao2_()
-        if direita: return ast.OperacaoBin(operador, esquerda, direita, pos)
-        else: return esquerda
+        centro = self.expressao2_()
+        if not centro: return esquerda
+
+        direita = self.expressao2__()
+        if not direita: return esquerda
+
+        return ast.OperacaoTer("TERNARIO", esquerda, centro, direita, pos)
 
     def expressao2_(self):
-        pos = self.posAtual()
         operador = self.tipoAtual()
 
-        if operador != "MAIS":
-            return []
-        self.pop()
+        if operador == "TERNARIO1":
+            self.pop()
 
-        esquerda = self.expressao3()
-        direita = self.expressao2_()
-        if direita: return ast.OperacaoBin(operador, esquerda, direita, pos)
-        else: return esquerda
+            centro = self.expressao3()
+            return centro
+            
+        return []
+    
+    def expressao2__(self):
+        operador = self.tipoAtual()
+
+        if operador == "TERNARIO2":
+            self.pop()
+
+            direita = self.expressao2()
+            return direita
+        
+        self.erro("Sintático", "EXPRESSAO TERNARIA MAL FORMATADA. ESPERAVA ❕")
+        return []
+
 
     def expressao3(self): # or
         return self.expressao4()
