@@ -85,22 +85,27 @@ TABELA_OPERACOES = {
 class TabelaSimbolos:
 
     def __init__(self):
-        self.escopo_atual = 0
+        self.escopo_atual = -1
         self.escopo_com_loop = 0
         self.tabela = {}
 
-    def adiciona_variavel(self, nome, categoria, tipo, pos):
-        if self.tabela[nome]:
+        self.adiciona_funcao("PRINT", "STRING", "VOID")
+        self.adiciona_funcao("SCAN", "STRING", "VOID")
+        self.abrir_escopo()
+
+    def adiciona_variavel(self, nome, tipo, pos=[], categoria="VARIAVEL"):
+        if nome in self.tabela:
             return False, f"Declaracao duplicada. {nome} ja foi declarado como {tabela[nome]['categoria']} {tabela[nome]['tipo']} em {tabela[nome]['pos']}"
         
-        self.tabela[nome] = {"tipo": tipo, "categoria": categoria, "pos": pos, "escopo": escopo_atual, "utilizada": False}
+        self.tabela[nome] = {"tipo": tipo, "categoria": categoria, "pos": pos, "escopo": self.escopo_atual, "utilizada": False}
         return True, ""
     
-    def adiciona_funcao(self, nome, categoria, params, tipo, pos):
-        if self.tabela[nome]:
+    def adiciona_funcao(self, nome, params, tipo, pos=[], categoria="FUNCAO"):
+        print("adicionar", nome, categoria, params, tipo, pos)
+        if nome in self.tabela:
             return False, f"Declaracao duplicada. {nome} ja foi declarado como {tabela[nome]['categoria']} {tabela[nome]['tipo']} em {tabela[nome]['pos']}"
         
-        self.tabela[nome] = {"tipo": tipo, "categoria": categoria, "params": params, "pos": pos, "escopo": escopo_atual, "utilizada": False}
+        self.tabela[nome] = {"tipo": tipo, "categoria": categoria, "params": params, "pos": pos, "escopo": self.escopo_atual, "utilizada": False}
         return True, ""
     
     def imprimir(self):
@@ -135,12 +140,14 @@ class TabelaSimbolos:
 
     def fechar_escopo(self, loop=False):
         warnings = []
+        print(f"escopo: {self.escopo_atual} -> {self.escopo_atual-1}")
 
+        print("tabela", self.tabela)
         for variavel in self.tabela:
-            print("v:", variavel['nome'], "esc:", variavel['escopo'])
-            if variavel['escopo'] >= self.escopo_atual:
-                if not variavel['utilizada']:
-                    warnings.append(f"Variavel nao utilizada: {variavel['nome']}, declarada em {variavel['pos']}")
+            print("v:", self.tabela[variavel])
+            if self.tabela[variavel]['escopo'] >= self.escopo_atual:
+                if not self.tabela[variavel]['utilizada']:
+                    warnings.append(f"Variavel nao utilizada: {self.tabela[variavel]['nome']}, declarada em {variavel['pos']}")
                 print('removida')
                 self.tabela.pop(variavel)
 

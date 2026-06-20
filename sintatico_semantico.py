@@ -2,7 +2,6 @@ from token_classe import Token
 import arvore_sintatica as ast
 import tabela_simbolos as tab
 
-FUNCOES = {"PRINT", "SCAN"}
 CONVERSAO_DE_OPERADOR = {
     "MAIS_IGUAL": "MAIS",
     "MENOS_IGUAL": "MENOS",
@@ -37,14 +36,12 @@ class Sintatico:
     def noValorAtual(self):
         if self.matchTipo("NUMERAL"):
             return ast.Numero(self.valorAtual(), self.posAtual())
-        if self.matchTipo("IDENTIFICADOR"):
-            return ast.Identificador(self.valorAtual(), self.posAtual())
         if self.matchTipo("BOOLEANO"):
             return ast.Booleano(self.valorAtual(), self.posAtual())
         if self.matchTipo("TEXTO"):
             return ast.String(self.valorAtual(), self.posAtual())
-        if self.matchGrupo(FUNCOES):
-            return self.funcao()
+        if self.matchClasse("IDENTIFICADOR"):
+            return ast.Identificador(self.valorAtual(), self.posAtual())
         
         return False
     
@@ -80,7 +77,7 @@ class Sintatico:
         self.tokens.pop(0)
 
     def ehValor(self):
-        return self.matchClasse("LITERAL") or self.matchClasse("BOOLEANO") or self.matchClasse("IDENTIFICADOR") or self.matchGrupo(FUNCOES)
+        return self.matchClasse("LITERAL") or self.matchClasse("BOOLEANO") or self.matchClasse("IDENTIFICADOR") or self.matchTipo("FUNCAO")
 
     def panic_mode(self):
         linha_atual = self.tokens[0].linha
@@ -150,15 +147,10 @@ class Sintatico:
             if not loop: return self.bloco_()
             return [loop] + self.bloco_()
 
-        if self.matchGrupo(FUNCOES):
-            funcao = self.funcao()
-            if not funcao: return self.bloco_()
-            return [funcao] + self.bloco_()
-        
-        if self.matchGrupo("IDENTIFICADOR"):
-            atri = self.atribuicao()
-            if not atri: return self.bloco_()
-            return [atri] + self.bloco_()
+        if self.matchClasse("IDENTIFICADOR"):
+            expressao = self.expressao()
+            if not expressao: return self.bloco_()
+            return expressao + self.bloco_()
 
         if self.matchTipo("FIM"):
             self.erro("SINTATICO", "TOKEN DE FIM DE CODIGO INESPERADO")
@@ -199,34 +191,7 @@ class Sintatico:
             self.erro("SINTATICO", "PARAMETROS MAL FORMATADOS")
         
         return [valor]
-
-
-
-    def funcao(self):
-        if not self.matchGrupo(FUNCOES): return False
-        nome = self.valorAtual()
-        pos = self.posAtual()
-        self.pop()
-
-        if self.matchTipo("ABRE_PARENTESES"):
-            self.pop()
-        else:
-            self.erro("SINTATICO", "FUNCAO MAL FORMATADA. ESPERAVA (")
-            self.panic_parenteses()
-            if self.matchTipo("FECHA_PARENTESES"): self.pop()
-            return ast.ChamadaFuncao(nome, [], pos)
-
-        parametros = self.parametros()
-
-        if self.matchTipo("FECHA_PARENTESES"):
-            self.pop()
-        else:
-            self.erro("SINTATICO", "FUNCAO MAL FORMATADA. ESPERAVA )")
-            self.panic_parenteses()
-            if self.matchTipo("FECHA_PARENTESES"): self.pop()
-
-        return ast.ChamadaFuncao(nome, parametros, pos)
-    
+  
 
     def condicao(self):
         if not self.matchTipo("IF"): return False
@@ -296,6 +261,7 @@ class Sintatico:
         else:
             self.erro("SINTATICO", "ESTRUTURA DE DECISAO MAL FORMATADA")
             return []
+
 
     def loop(self):
         if not self.matchTipo("FOR"):
@@ -452,6 +418,20 @@ class Sintatico:
         return []
 
 
+    def quebra_declaracoes(self, v, tipo):
+
+        if len(v) < 1:
+            return []
+
+        if isinstance(v[0], ast.OperacaoBin) and v[0].operador == "ATRIBUICAO":
+            identificador = v[0].esquerda
+            valor = v[0].direita
+            return [ast.Declaracao(identificador, tipo, v[0].pos), ast.Atribuicao(identificador, valor, v[0].pos)] + self.quebra_declaracoes(v[1:], tipo)
+
+        if isinstance(v[0], ast.Identificador):
+            return [ast.Declaracao(v[0], tipo, v[0].pos)] + self.quebra_declaracoes(v[1:], tipo)
+        return self.quebra_declaracoes(v[1:], tipo)
+
     def declaracao(self):
         if not self.matchGrupo(tab.TIPOS):
             return False
@@ -459,42 +439,15 @@ class Sintatico:
         pos = self.posAtual()
         self.pop()
 
-        if not self.matchTipo("IDENTIFICADOR"):
-            self.erro("SINTATICO", "DECLARACAO MAL FORMATADA. IDENTIFICADOR ESPERADO")
-            return False
-        nome = self.valorAtual()
-        comandos = []
-        comandos.append(ast.Declaracao(ast.Identificador(nome, None), ast.Tipo(tipo, None), pos))
-        self.pop()
-
-        if self.matchTipo("ATRIBUICAO"):
-            self.pop()
-            pos = self.posAtual()
-            valor = self.expressao()
-            comandos.append(ast.Atribuicao(ast.Identificador(nome, None), valor, pos))
+        if not self.matchGrupo("IDENTIFICADOR"):
+            self.erro("SINTATICO", "DECLARACAO SEM IDENTIFICADOR")
+            return[]
         
-        if self.matchTipo("VIRGULA"):
-            self.pop()
-            novos = self.declaracao()
-            comandos.append(novos)
+        valores = self.expressao()
+        comandos = self.quebra_declaracoes(valores, tipo)
+                    
 
         return comandos
-       
-    def atribuicao(self):
-        if not self.matchGrupo("IDENTIFICADOR"):
-            return False
-        pos = self.posAtual()
-        nome = self.valorAtual()
-        self.pop()
-
-        if not self.matchTipo("ATRIBUICAO"):
-            self.erro("SINTATICO", "ATRIBUICAO MAL FORMATADA - ATRIBUICAO ESPERADA")
-            return False
-        self.pop()
-
-        valor = self.expressao()
-        return ast.Atribuicao(ast.Identificador(nome, None), valor, pos)
-
 
 
     def expressao(self): # virgula
@@ -733,6 +686,7 @@ class Sintatico:
         
         return self.expressao11()    
     
+
     def expressao11(self): # parenteses/incremento-pos
         if self.matchTipo("ABRE_PARENTESES"):
             self.pop()
@@ -768,6 +722,8 @@ class Sintatico:
         
 
     def programa(self):
+
+        self.tabela_simbolos.imprimir()
         # inicio, bloco(s), fim
         if not self.matchTipo("INICIO"):
             self.erro("SINTATICO", "SEM TOKEN DE INICIO DE PROGRAMA")

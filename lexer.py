@@ -88,11 +88,14 @@ PALAVRAS_RESERVADAS = {
     "🔁" : ["PAL_RESERVADA", "FOR"],
     "⏹️" : ["PAL_RESERVADA", "BREAK"],
     "▶️" : ["PAL_RESERVADA", "CONTINUE"],
-    "🖨️" : ["PAL_RESERVADA", "PRINT"],
-    "🎤" : ["PAL_RESERVADA", "SCAN"],
-    "🧩" : ["PAL_RESERVADA", "FUNCAO"],
+    "🧩" : ["PAL_RESERVADA", "DEC_FUNCAO"],
     "🔙" : ["PAL_RESERVADA", "RETURN"]
 }
+
+FUNCOES = {
+    "🖨️": "PRINT",
+    "🎤": "SCAN"
+    }
 
 ALGARISMOS = ["0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "⏺️"]
 
@@ -333,7 +336,10 @@ class Lexer:
         if self.resolveNumeral(token): return True
 
         if(len(token)>0):
-            self.adicionaToken(token, "IDENTIFICADOR", "IDENTIFICADOR", self.pivo.linha, self.pivo.coluna)
+            if token in FUNCOES:
+                self.adicionaToken(FUNCOES[token], "IDENTIFICADOR", "FUNCAO", self.pivo.linha, self.pivo.coluna)
+            else:
+                self.adicionaToken(token, "IDENTIFICADOR", "IDENTIFICADOR", self.pivo.linha, self.pivo.coluna)
             return True
         
         self.adicionaErro("TOKEN MAL FORMADO")
