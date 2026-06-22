@@ -187,11 +187,13 @@ class Lexer:
         # confere se é um número bem formado   
         if re.match('^(0️⃣|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)*(⏺️)?(0️⃣|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)+$', token) == None:
             self.adicionaErro("NUMERO MAL FORMADO")
-            return True
+            return False
         
         # começa com numero mas não está bem formado
+        if re.match('.*⏺️.*', token): tipo = 'FLOAT'
+        else: tipo = 'INT'
         numero=self.traduzNumeral(token)
-        self.adicionaToken(numero, "LITERAL", "NUMERAL", self.pivo.linha, self.pivo.coluna)
+        self.adicionaToken(numero, "LITERAL", tipo, self.pivo.linha, self.pivo.coluna)
         return True
 
     def resolveComentarios(self):

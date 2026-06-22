@@ -1,7 +1,7 @@
 import lexer as le
 import sintatico_semantico as si
 
-with open('exemplo.😎', 'r') as f:
+with open('-lang/exemplo.😎', 'r') as f:
     
     print("\t\tANALISE LÉXICA:")
     print("CLASSE,\t\tTIPO,\tTOKEN,\tLINHA, COLUNA")

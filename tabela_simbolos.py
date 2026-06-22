@@ -10,9 +10,9 @@ OPERACOES_SEMELHANTES = {
     'POTENCIA':'MENOS',
     'IGUAL':'IGUAL',
     'MAIOR':'IGUAL',
-    'MENOR':'IGUAL',
     'AND':'AND',
     'OR':'AND',
+    'NAO':'NAO'
     }
 
 TABELA_OPERACOES = {
@@ -80,6 +80,7 @@ TABELA_OPERACOES = {
             'INT': 'BOOLEANO',
             'FLOAT': 'BOOLEANO'},
         },
+    'NAO': {'BOOLEANO'}
     }    
 
 
@@ -98,6 +99,9 @@ class TabelaSimbolos:
         return self.adiciona_funcao(nome, [], tipo, pos, categ)
     
     def adiciona_funcao(self, nome, params, tipo, pos=[], categ="FUNCAO"):
+        if isinstance(nome, ast.Identificador):
+            nome = nome.nome
+
         if nome in self.tabela:
             return False, f"Declaracao duplicada. {nome} ja foi declarado como {self.tabela[nome]['categ']} {self.tabela[nome]['tipo']} em {self.tabela[nome]['pos']}"
         
@@ -105,7 +109,15 @@ class TabelaSimbolos:
         print(nome, "ADICIONADA!!!")
         self.imprimir_tabela()
         return True, ""
-    
+
+    def atribui_identificador(self, nome, valor):
+        if isinstance(nome, ast.Identificador):
+            nome=nome.nome
+        try:
+            self.tabela[nome]['valor'] = valor
+            return True, ''
+        except:
+            return False, 'erro em atribuicao'
 
     def imprimir(self):
         print(f"Escopo: {self.escopo_atual}\tEscopo com loop: {self.escopo_com_loop}")
@@ -133,34 +145,7 @@ class TabelaSimbolos:
                 if len(str(valor)) < 16 and espacos[k+1]: print('\t', end='')
 
             print('')
-                
-    
 
-    def verifica_variavel(self, nome):
-        if isinstance(nome, ast.Identificador):
-            nome = nome.nome
-        try:
-            print(nome, self.tabela[nome])
-            if self.tabela[nome]['categ'] == "VARIAVEL":
-                self.tabela[nome]['usada'] = True
-                return True, self.tabela[nome]['tipo']
-            else:
-                return False, f"esperava VARIAVEL, mas {nome} foi declarado como {self.tabela[nome]['categ']} em {self.tabela[nome]['pos']}"
-        except:
-            return False, f"Variavel {nome} nao declarada"
-    
-    def verifica_funcao(self, nome, params):
-        try:
-            if self.tabela[nome]['categ'] == "FUNCAO":
-                for p in params:
-                    print("parametro:", p)
-                return True, self.tabela[nome]['tipo']
-            else:
-                return False, f"esperava FUNCAO, mas {nome} foi declarado como {self.tabela[nome]['categ']} em {self.tabela[nome]['pos']}"
-        except:
-            return False, f"Funcao {nome} nao declarada"
-    
-    
     def abrir_escopo(self, loop=False):
         print(f"escopo: {self.escopo_atual} -> {self.escopo_atual+1}")
         self.escopo_atual += 1
@@ -190,90 +175,102 @@ class TabelaSimbolos:
         else:
             return True, ""
 
-
-    def verifica_operacao_variaveis(self, operador, variaveis):
-        tipos = []
-        for v in variaveis:
-            if isinstance(v, ast.Identificador):
-                v = v.nome
-            a, b = self.verifica_variavel(v)
-            if not a: return a, b
-            tipos.append(self.tabela[v]['tipo'])
-            self.tabela[v]['usada'] = True
-
-        return self.verifica_operacao_tipos(operador, tipos)
-    
-    def verifica_operacao_tipos(self, operador, tipos):
-        if operador=="NAO":
-            if tipos != "BOOLEANO":
-                return False, f"Esperava BOOLEANO para operador {operador}, recebeu {tipos}"
-            return True, "BOOLEANO"
-
-        if operador=="ATRIBUICAO":
-            if tipos[0] != tipos[1]:
-                return False, f"Esperava tipos iguais para operador {operador}, recebeu {tipos}"
-            return True, tipos[0]
-
-        operador = OPERACOES_SEMELHANTES[operador]
-
-        try:
-            return True, TABELA_OPERACOES[operador][tipos[0]][tipos[1]]
-        except:
-            return False, f"Operacao {operador} nao permitida entre os tipos {tipos} ou ainda nao implementada"
-
-        
-    def verifica_break_continue(self):
-        if self.escopo_com_loop <= 0:
-            return False, f"Comando break/continue encontrado fora de estrutura de repeticao"
-        else: return True, ""
-
-    def atribuicao(self, nome, valor):
-
+    def verifica_variavel(self, nome):
         if isinstance(nome, ast.Identificador):
-            nome = nome.nome
+            nome=nome.nome
+
+        sucesso = nome in self.tabela
+        if sucesso: return sucesso, ''
+        else: return sucesso, f"variavel {nome} nao declarada"
+    
+    def valor_variavel(self, nome):
+        if isinstance(nome, ast.Identificador):
+            nome=nome.nome
+        
         sucesso, tipo = self.verifica_variavel(nome)
+        if not sucesso: return sucesso, tipo
 
-        print(sucesso, tipo)
+        valor = self.tabela[nome]['valor']
+        if not valor: return False, f"valor da variavel {nome} nao declarado"
+        return True, valor
 
-        if not sucesso:
-            return sucesso, tipo
 
-        if isinstance(valor, ast.Numero) and (tipo == "INT" or tipo == "FLOAT"):
-            self.tabela[nome]['valor'] = valor.valor
+    def declaracao(self, declaracao):
+        identificador = declaracao.nome
+        if not isinstance(identificador, ast.Identificador):
+            return False, f"declaracao sem identificador"
 
-        elif isinstance(valor, ast.String) and (tipo == "CHAR" or "STRING"):
-            self.tabela[nome]['valor'] = valor.valor
+        nome = identificador.nome
+        tipo = declaracao.tipo
+        posicao = declaracao.pos
+
+        return self.adiciona_variavel(nome, tipo, pos)
+
+    def atribuicao(self, atribuicao):
+        if not isinstance(atribuicao, ast.OperacaoBin) or atribuicao.operador != "ATRIBUICAO":
+            return False, "Erro de atribuicao"
+
+        print("ATRIBUICAO", atribuicao)
+        identificador = atribuicao.esquerda
+        valor = atribuicao.direita
+        print(identificador, valor)
+
+        if not isinstance(identificador, ast.Identificador):
+            return False, "Atribuicao mal formatada. esperava um identificador"
+        
+        if isinstance(valor, ast.Literal):
+            tipo = valor.tipo
+            valor = valor.valor
+
+        elif isinstance(valor, ast.Identificador):
+            sucesso, valor = self.valor_variavel(valor)
+            if not sucesso: return sucesso, valor
+            tipo = self.tabela[valor]['tipo']
         
         else:
-            sucesso, tipo = self.resolve_operacao(valor)
-            if not sucesso: return sucesso, tipo
-            
-        return True, ''
+            sucesso, valor = self.resolve_expressao(valor)
+            if not sucesso: return sucesso, valor
+            tipo = valor.tipo
 
-    def resolve_operacao(self, no):
-        if isinstance(no, ast.OperacaoTer):
+        sucesso, erro = self.verifica_variavel(identificador)
+        if not sucesso: return sucesso, erro
+
+        print(sucesso, tipo)
+        print(self.tabela[identificador.nome]['tipo'])
+        if self.tabela[identificador.nome]['tipo'] != tipo:
+            return False, f"tentativa de atribuicao de tipo {tipo} a variavel {identificador.nome} de tipo {self.tabela[identificador.nome]['tipo']}"
+
+        return self.atribui_identificador(identificador, valor)
+
+    def resolve_expressao(self, no):
+        if isinstance(no, ast.Literal):
             return True, no
         
-        if isinstance(no, ast.OperacaoBin):
-            pos = no.pos
+        if isinstance(no, ast.Identificador):
+            return self.valor_variavel(no)
+        
+        if isinstance(no, ast.OperacaoUn):
             operador = no.operador
-            esquerda = no.esquerda
-            direita = no.direita
-            
-            sucesso, tipo = self.verifica_operacao_variaveis(operador, [esquerda, direita])
-            if not sucesso: return sucesso, tipo
-            
-            if isinstance(esquerda, ast.Numero): esquerda = no.esquerda.valor
-            if isinstance(direita, ast.Numero): direita = no.direita.valor
-            
-            if operador=="ATRIBUICAO":
-                return self.atribuicao(esquerda, direita)
-            
-            if operador=="MAIS":
-                if isinstance(esquerda, ast.Numero) and isinstance(direita, ast.Numero):
-                    return sucesso, ast.Numero(esquerda.valor+direita.valor, pos)
-                else:
-                    no.tipo = tipo
-                    return sucesso, no
-                
-            return False, "nao sei"
+            try: operador = OPERACOES_SEMELHANTES[operador]
+            except: return False, "Operador nao encontrado na tabela de expressoes"
+            sucesso, operando = self.resolve_expressao(no.operando)
+            if not sucesso: return sucesso, operando
+
+            if not operador in TABELA_OPERACOES:
+                return False, "Operador nao encontrado na tabela de expressoes"
+            if not operando.tipo in TABELA_OPERACOES[operador]:
+                return False, f"Operacao {operador} nao permitida para o tipo {operando.tipo}"
+            return True, TABELA_OPERACOES[operador][operando.tipo]
+
+        if isinstance(no, ast.OperacaoBin):
+            operador = no.operador
+            sucesso, esquerda = self.resolve_expressao(no.esquerda)
+            if not sucesso: return sucesso, esquerda
+            sucesso, direita = self.resolve_expressao(no.direita)
+            if not sucesso: return sucesso, direita
+            print("COISOOOO",operador, esquerda, direita)
+            if not operador in TABELA_OPERACOES:
+                return False, "Operador nao encontrado na tabela de expressoes"
+            if not esquerda.tipo in TABELA_OPERACOES[operador]:
+                return False, f"Operacao {operador} nao permitida para o tipo {esquerda.tipo}"
+            return True, TABELA_OPERACOES[operador][esquerda.tipo]

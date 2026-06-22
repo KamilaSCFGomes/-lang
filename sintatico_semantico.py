@@ -34,12 +34,8 @@ class Sintatico:
         return [self.tokens[0].linha, self.tokens[0].coluna]
 
     def noValorAtual(self):
-        if self.matchTipo("NUMERAL"):
-            return ast.Numero(self.valorAtual(), self.posAtual())
-        if self.matchTipo("BOOLEANO"):
-            return ast.Booleano(self.valorAtual(), self.posAtual())
-        if self.matchTipo("TEXTO"):
-            return ast.String(self.valorAtual(), self.posAtual())
+        if self.matchClasse("LITERAL"):
+            return ast.Literal(self.valorAtual(), self.tipoAtual(), self.posAtual())
         if self.matchClasse("IDENTIFICADOR"):
             return ast.Identificador(self.valorAtual(), self.posAtual())
         
@@ -78,7 +74,7 @@ class Sintatico:
         self.tokens.pop(0)
 
     def ehValor(self):
-        return self.matchClasse("LITERAL") or self.matchClasse("BOOLEANO") or self.matchClasse("IDENTIFICADOR") or self.matchTipo("FUNCAO")
+        return self.matchClasse("LITERAL") or self.matchClasse("IDENTIFICADOR")
 
     def panic_mode(self):
         linha_atual = self.tokens[0].linha
@@ -156,16 +152,17 @@ class Sintatico:
         if sucesso: return tipo
         self.erro("SEMANTICO", tipo)
 
-    def atribui_tabela(self, nome, valor):            
-        sucesso, tipo = self.tabela_simbolos.atribuicao(nome, valor)
-        if sucesso: return
+    def atribui_tabela(self, atribuicao):            
+        sucesso, tipo = self.tabela_simbolos.atribuicao(atribuicao)
+        if sucesso: return True
         self.erro("SEMANTICO", tipo)
+        return False
         
     def resolve_operacao(self, no):
-        sucesso, tipo = self.tabela_simbolos.resolve_operacao(no)
         if sucesso: return tipo
         self.erro("SEMANTICO", tipo)
         return no
+
 
 
     def bloco(self):
@@ -407,17 +404,23 @@ class Sintatico:
 
         if len(v) < 1:
             return []
+
+        print('coiso ',v)
         pos = v[0].pos
 
         if isinstance(v[0], ast.OperacaoBin) and v[0].operador == "ATRIBUICAO":
             identificador = v[0].esquerda
             valor = v[0].direita
-            self.adiciona_variavel(identificador.nome, tipo, pos)
-            self.atribui_tabela(identificador, valor)
-            return [ast.Declaracao(identificador, tipo, pos), ast.Atribuicao(identificador, valor, v[0].pos)] + self.quebra_declaracoes(v[1:], tipo)
+            
+            declaracao = ast.Declaracao(identificador, tipo, pos)
+            atribuicao = ast.OperacaoBin("ATRIBUICAO", identificador, valor, v[0].pos, None)
+            self.adiciona_variavel(identificador, tipo, pos)
+            self.atribui_tabela(atribuicao)
+
+            return [declaracao, atribuicao] + self.quebra_declaracoes(v[1:], tipo)
 
         if isinstance(v[0], ast.Identificador):
-            self.adiciona_variavel(v[0].nome, tipo, pos)
+            self.adiciona_variavel(v[0], tipo, pos)
             return [ast.Declaracao(v[0], tipo, v[0].pos)] + self.quebra_declaracoes(v[1:], tipo)
         return self.quebra_declaracoes(v[1:], tipo)
 
@@ -460,7 +463,9 @@ class Sintatico:
             direita = ast.OperacaoBin(operador, esquerda, direita, pos, None)
             operador = "ATRIBUICAO"
 
-        return ast.OperacaoBin(operador, esquerda, direita, pos, None)
+        atribuicao = ast.OperacaoBin(operador, esquerda, direita, pos, None)
+        self.atribui_tabela(atribuicao)
+        return atribuicao
         
     def expressao1_(self):
         pos = self.posAtual()
@@ -477,8 +482,10 @@ class Sintatico:
                 operador = CONVERSAO_DE_OPERADOR[operador]
                 direita = ast.OperacaoBin(operador, esquerda, direita, pos, None)
                 operador = "ATRIBUICAO"
-
-            return ast.OperacaoBin("ATRIBUICAO", esquerda, direita, pos, None)
+            
+            atribuicao = ast.OperacaoBin("ATRIBUICAO", esquerda, direita, pos, None)
+            self.atribui_tabela(atribuicao)
+            return atribuicao
 
         return []
 

@@ -5,23 +5,14 @@ class No:
     pass
 
 @dataclass
-class Numero(No):
+class Literal(No):
     valor: int
-    pos: Optional[[]]
-
-@dataclass
-class String(No):
-    valor: str
+    tipo: str
     pos: Optional[[]]
 
 @dataclass
 class Tipo(No):
     tipo: str
-    pos: Optional[[]]
-
-@dataclass
-class Booleano(No):
-    valor: bool
     pos: Optional[[]]
 
 @dataclass
@@ -56,12 +47,6 @@ class OperacaoTer(No):
     esquerda: No
     centro: No
     direita: No
-    pos: Optional[[]]
-
-@dataclass
-class Atribuicao(No):
-    alvo: Identificador
-    valor: No
     pos: Optional[[]]
 
 @dataclass
