@@ -51,7 +51,7 @@ class Sintatico:
 
     def imprimeWarnings(self):
         for w in self.warnings:
-            print("⚠️  Warning!⚠️   ", w)
+            print(f"⚠️  Warning!⚠️   {w[0]} 📍 {w[1]}")
 
 
     def erro(self, categoria="", tipo="NAO ESPECIFICADO"):
@@ -59,9 +59,10 @@ class Sintatico:
         print(f"⚠️  Erro {categoria}!⚠️   {tipo} 📍 {[self.tokens[0].linha, self.tokens[0].coluna]}")
         return
     
-    def warning(self, tipo="NAO ESPECIFICADO"):
-        self.warnings.append([f"Warning: {tipo}", [self.tokens[0].linha, self.tokens[0].coluna]])
-        print(f"⚠️  Warning!⚠️   {tipo} 📍 {[self.tokens[0].linha, self.tokens[0].coluna]}")
+    def warning(self, tipo=["NAO ESPECIFICADO"]):
+        for t in tipo:
+            self.warnings.append([f"Warning: {t}", [self.tokens[0].linha, self.tokens[0].coluna]])
+            print(f"⚠️  Warning!⚠️   {t} 📍 {[self.tokens[0].linha, self.tokens[0].coluna]}")
         return
 
     def matchClasse(self, classe):
@@ -108,23 +109,80 @@ class Sintatico:
             self.pop()
             
 
+    def abrir_escopo(self):
+        return self.tabela_simbolos.abrir_escopo()
+    
+    def fechar_escopo(self):
+        sucesso, resposta = self.tabela_simbolos.fechar_escopo()
+        if not sucesso:
+            self.erro("SEMANTICO", resposta)
+            return
+        if resposta:
+            self.warning(resposta)
+            return
+
+    def adiciona_variavel(self, nome, tipo, pos):
+        sucesso, erro = self.tabela_simbolos.adiciona_variavel(nome, tipo, pos)
+        if sucesso: return
+        self.erro("SEMANTICO", erro)
+
+    def adiciona_funcao(self, nome, params, tipo, pos):
+        sucesso, erro = self.tabela_simbolos.adiciona_funcao(nome, tipo, pos)
+        if sucesso: return
+        self.erro("SEMANTICO", erro)
+    
+    def verifica_variavel(self, nome):
+        sucesso, tipo = self.tabela_simbolos.verifica_variavel(nome)
+        if sucesso: return tipo
+        self.erro("SEMANTICO", tipo)
+    
+    def verifica_funcao(self, nome, params):
+        sucesso, tipo = self.tabela_simbolos.verifica_funcao(nome, params)
+        if sucesso: return tipo
+        self.erro("SEMANTICO", tipo)
+
+    def verifica_operacao_variaveis(self, operador, variaveis):
+        sucesso, tipo = self.tabela_simbolos.verifica_operacao_variaveis(operador, variaveis)
+        if sucesso: return tipo
+        self.erro("SEMANTICO", tipo)
+    
+    def verifica_operacao_tipos(self, operador, tipos):
+        sucesso, tipo = self.tabela_simbolos.verifica_operacao_tipos(operador, tipos)
+        if sucesso: return tipo
+        self.erro("SEMANTICO", tipo)
+
+    def verifica_break_continue(self):
+        sucesso, tipo = self.tabela_simbolos.verifica_break_continue()
+        if sucesso: return tipo
+        self.erro("SEMANTICO", tipo)
+
+    def atribui_tabela(self, nome, valor):            
+        sucesso, tipo = self.tabela_simbolos.atribuicao(nome, valor)
+        if sucesso: return
+        self.erro("SEMANTICO", tipo)
+        
+    def resolve_operacao(self, no):
+        sucesso, tipo = self.tabela_simbolos.resolve_operacao(no)
+        if sucesso: return tipo
+        self.erro("SEMANTICO", tipo)
+        return no
+
 
     def bloco(self):
         if self.matchTipo("ABRE_CHAVE"):
-            self.tabela_simbolos.abrir_escopo()
+            self.abrir_escopo()
             pos = self.posAtual()
             self.pop()
 
             arvore = ast.Bloco(self.bloco_(), pos)
+            self.fechar_escopo()
             return arvore
             
         return False
         
     def bloco_(self):
-        self.imprimeTipoAtual()
 
         if self.matchTipo("FECHA_CHAVE"):
-            self.tabela_simbolos.fechar_escopo()
             self.pop()
             return []
         
@@ -143,7 +201,6 @@ class Sintatico:
             return [cond] + self.bloco_()
 
         if self.matchTipo("FOR"):
-            print('LOOOOOOOOOOP!!!!!')
             loop = self.loop()
             if not loop: return self.bloco_()
             return [loop] + self.bloco_()
@@ -264,6 +321,7 @@ class Sintatico:
             self.pop()
             return []
         
+        self.abrir_escopo()
         valor1 = self.loop_()
         
         if self.matchTipo("FECHA_PARENTESES"): # WHILE
@@ -271,14 +329,17 @@ class Sintatico:
 
             if len(valor1) < 1:
                 self.erro("SINTATICO", "ESTRUTURA DE REPETICAO SEM CONDICAO DE PARADA")
+                self.fechar_escopo()
                 return []
 
             if self.matchTipo("ABRE_CHAVE"):
                 corpo = self.bloco()
                 if corpo:
+                    self.fechar_escopo()
                     return ast.Loop(valor1, corpo, pos)
                 
             self.erro("SINTATICO", "ESTRUTURA DE REPETICAO SEM CORPO")
+            self.fechar_escopo()
             return []
         
 
@@ -288,6 +349,7 @@ class Sintatico:
             valor2 = self.loop_()
             if len(valor2) < 1:
                 self.erro("SINTATICO", "ESTRUTURA DE REPETICAO SEM CONDICAO DE PARADA")
+                self.fechar_escopo()
                 return []
 
             if self.matchTipo("DOIS_PONTOS"):
@@ -301,6 +363,7 @@ class Sintatico:
                     self.panic_parenteses()
                     if self.matchTipo("FECHA_PARENTESES"):
                         self.pop
+                    self.fechar_escopo()
                     return []
 
             else:
@@ -308,21 +371,25 @@ class Sintatico:
                 self.panic_parenteses()
                 if self.matchTipo("FECHA_PARENTESES"):
                     self.pop
+                self.fechar_escopo()
                 return []
             
             if self.matchTipo("ABRE_CHAVE"):
-                corpo = self.bloco()
+                self.pop()
+
+                corpo = ast.Bloco(self.bloco_(), pos)
                 if corpo:
                     novo_corpo = corpo.statements + valor3
                     loop = ast.Loop(valor2, novo_corpo, pos)
                     bloco = ast.Bloco(valor1 + [loop], corpo.pos)
+                    self.fechar_escopo()
                     return bloco
                 
             self.erro("SINTATICO", "ESTRUTURA DE REPETICAO SEM CORPO")
 
         self.erro("SINTATICO", "ESTRUTURA DE REPETICAO MAL FORMATADA. ESPERAVA UMA EXPRESSAO")
+        self.fechar_escopo()
         return []        
-        
 
     def loop_(self):
         if self.matchGrupo(tab.TIPOS):
@@ -340,13 +407,17 @@ class Sintatico:
 
         if len(v) < 1:
             return []
+        pos = v[0].pos
 
         if isinstance(v[0], ast.OperacaoBin) and v[0].operador == "ATRIBUICAO":
             identificador = v[0].esquerda
             valor = v[0].direita
-            return [ast.Declaracao(identificador, tipo, v[0].pos), ast.Atribuicao(identificador, valor, v[0].pos)] + self.quebra_declaracoes(v[1:], tipo)
+            self.adiciona_variavel(identificador.nome, tipo, pos)
+            self.atribui_tabela(identificador, valor)
+            return [ast.Declaracao(identificador, tipo, pos), ast.Atribuicao(identificador, valor, v[0].pos)] + self.quebra_declaracoes(v[1:], tipo)
 
         if isinstance(v[0], ast.Identificador):
+            self.adiciona_variavel(v[0].nome, tipo, pos)
             return [ast.Declaracao(v[0], tipo, v[0].pos)] + self.quebra_declaracoes(v[1:], tipo)
         return self.quebra_declaracoes(v[1:], tipo)
 
@@ -354,7 +425,6 @@ class Sintatico:
         if not self.matchGrupo(tab.TIPOS):
             return False
         tipo = self.tipoAtual()
-        pos = self.posAtual()
         self.pop()
 
         if not self.matchGrupo("IDENTIFICADOR"):
@@ -363,7 +433,6 @@ class Sintatico:
         
         valores = self.expressao()
         comandos = self.quebra_declaracoes(valores, tipo)
-                    
 
         return comandos
 
@@ -375,6 +444,7 @@ class Sintatico:
             self.pop()
             return no + self.expressao()
 
+        #no = self.resolve_operacao(no)
         return no
 
 
@@ -387,10 +457,11 @@ class Sintatico:
         if not direita: return esquerda
         if operador != "ATRIBUICAO":
             operador = CONVERSAO_DE_OPERADOR[operador]
-            direita = ast.OperacaoBin(operador, esquerda, direita, pos)
+            direita = ast.OperacaoBin(operador, esquerda, direita, pos, None)
             operador = "ATRIBUICAO"
-        return ast.OperacaoBin(operador, esquerda, direita, pos)
 
+        return ast.OperacaoBin(operador, esquerda, direita, pos, None)
+        
     def expressao1_(self):
         pos = self.posAtual()
         operador = self.tipoAtual()
@@ -404,10 +475,11 @@ class Sintatico:
             
             if operador != "ATRIBUICAO":
                 operador = CONVERSAO_DE_OPERADOR[operador]
-                direita = ast.OperacaoBin(operador, esquerda, direita, pos)
+                direita = ast.OperacaoBin(operador, esquerda, direita, pos, None)
                 operador = "ATRIBUICAO"
-            return ast.OperacaoBin("ATRIBUICAO", esquerda, direita, pos)
-            
+
+            return ast.OperacaoBin("ATRIBUICAO", esquerda, direita, pos, None)
+
         return []
 
 
@@ -457,7 +529,7 @@ class Sintatico:
             self.pop()
 
             direita = self.expressao4()
-            nova_esquerda = ast.OperacaoBin(operador, esquerda, direita, pos)
+            nova_esquerda = ast.OperacaoBin(operador, esquerda, direita, pos, None)
             return self.expressao3_(nova_esquerda)
         
         return esquerda
@@ -474,7 +546,7 @@ class Sintatico:
             self.pop()
 
             direita = self.expressao5()
-            nova_esquerda = ast.OperacaoBin(operador, esquerda, direita, pos)
+            nova_esquerda = ast.OperacaoBin(operador, esquerda, direita, pos, None)
             return self.expressao4_(nova_esquerda)
         
         return esquerda
@@ -491,10 +563,10 @@ class Sintatico:
             self.pop()
 
             direita = self.expressao6()
-            nova_esquerda = ast.OperacaoBin("IGUAL", esquerda, direita, pos)
+            nova_esquerda = ast.OperacaoBin("IGUAL", esquerda, direita, pos, None)
 
             if operador == "DIFERENTE":
-                nova_esquerda = ast.OperacaoUn("NAO", nova_esquerda, pos)
+                nova_esquerda = ast.OperacaoUn("NAO", nova_esquerda, pos, None)
             return self.expressao5_(nova_esquerda)
 
         return esquerda
@@ -514,12 +586,12 @@ class Sintatico:
 
             # converter todas as operações em MAIOR:
             if operador in ["MAIOR_IGUAL", "MENOR"]:
-                nova_esquerda = ast.OperacaoBin("MAIOR", direita, esquerda, pos)
+                nova_esquerda = ast.OperacaoBin("MAIOR", direita, esquerda, pos, None)
             else:
-                nova_esquerda = ast.OperacaoBin("MAIOR", esquerda, direita, pos)
+                nova_esquerda = ast.OperacaoBin("MAIOR", esquerda, direita, pos, None)
 
             if operador in ["MAIOR_IGUAL", "MENOR_IGUAL"]:
-                nova_esquerda = ast.OperacaoUn("NAO", nova_esquerda, pos)
+                nova_esquerda = ast.OperacaoUn("NAO", nova_esquerda, pos, None)
 
             return self.expressao6_(nova_esquerda)
         return esquerda
@@ -536,7 +608,7 @@ class Sintatico:
             self.pop()
 
             direita = self.expressao8()
-            nova_esquerda = ast.OperacaoBin(operador, esquerda, direita, pos)
+            nova_esquerda = ast.OperacaoBin(operador, esquerda, direita, pos, None)
             return self.expressao7_(nova_esquerda)
         return esquerda
 
@@ -552,7 +624,7 @@ class Sintatico:
             self.pop()
 
             direita = self.expressao9()
-            nova_esquerda = ast.OperacaoBin(operador, esquerda, direita, pos)
+            nova_esquerda = ast.OperacaoBin(operador, esquerda, direita, pos, None)
             return self.expressao8_(nova_esquerda)
         
         return esquerda
@@ -565,7 +637,7 @@ class Sintatico:
         direita = self.expressao9_()
 
         if not direita: return esquerda
-        return ast.OperacaoBin(operador, esquerda, direita, pos)
+        return ast.OperacaoBin(operador, esquerda, direita, pos, None)
 
     def expressao9_(self):
         pos = self.posAtual()
@@ -578,7 +650,7 @@ class Sintatico:
             direita = self.expressao9_()
             if not direita: return esquerda
             
-            return ast.OperacaoBin("ATRIBUICAO", esquerda, direita, pos)
+            return ast.OperacaoBin("ATRIBUICAO", esquerda, direita, pos, None)
         return []
 
 
@@ -592,15 +664,15 @@ class Sintatico:
             direita = self.expressao10()
 
             if operador == "MAIS_MAIS":
-                return ast.OperacaoBin("MAIS", direita, ast.Numero(1, None), pos)
+                return ast.OperacaoBin("MAIS", direita, ast.Numero(1, None), pos, None)
             
             if operador == "MENOS_MENOS":
-                return ast.OperacaoBin("MENOS", direita, ast.Numero(1, None), pos)
+                return ast.OperacaoBin("MENOS", direita, ast.Numero(1, None), pos, None)
             
             if operador == "MENOS":
-                return ast.OperacaoBin("VEZES", direita, ast.Numero(-1, None), pos)
+                return ast.OperacaoBin("VEZES", direita, ast.Numero(-1, None), pos, None)
             
-            return ast.OperacaoUn(operador, direita, pos)
+            return ast.OperacaoUn(operador, direita, pos, None)
         
         return self.expressao11()    
     

@@ -41,12 +41,14 @@ class OperacaoBin(No):
     esquerda: No
     direita: No
     pos: Optional[[]]
+    tipo: Optional[str]
 
 @dataclass
 class OperacaoUn(No):
     operador: str
     operando: No
     pos: Optional[[]]
+    tipo: Optional[str]
 
 @dataclass
 class OperacaoTer(No):
