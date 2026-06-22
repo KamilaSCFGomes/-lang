@@ -143,6 +143,7 @@ class Sintatico:
             return [cond] + self.bloco_()
 
         if self.matchTipo("FOR"):
+            print('LOOOOOOOOOOP!!!!!')
             loop = self.loop()
             if not loop: return self.bloco_()
             return [loop] + self.bloco_()
@@ -171,26 +172,6 @@ class Sintatico:
             return [self.bloco()] + self.bloco_()
 
         return []
-
-
-    def parametros(self):
-        if self.matchTipo("FECHA_PARENTESES"):
-            return []
-        
-        valor = self.expressao()
-        if not valor:
-            self.erro("SINTATICO", "PARAMETROS MAL FORMATADOS")
-            self.panic_parenteses()
-            return []
-        
-        if self.matchTipo("VIRGULA"):
-            self.pop()
-            return [valor] + self.parametros()
-        
-        if self.matchTipo("ABRE_CHAVE") or self.matchTipo("FECHA_CHAVE"):
-            self.erro("SINTATICO", "PARAMETROS MAL FORMATADOS")
-        
-        return [valor]
   
 
     def condicao(self):
@@ -277,145 +258,82 @@ class Sintatico:
             if self.matchTipo("FECHA_PARENTESES"):
                 self.pop()
             return []
+        
+        if self.matchTipo("FECHA_PARENTESES"):
+            self.erro("SINTATICO", "ESTRUTURA DE REPETICAO MAL FORMATADA. ESPERAVA UMA EXPRESSAO")
+            self.pop()
+            return []
+        
+        valor1 = self.loop_()
+        
+        if self.matchTipo("FECHA_PARENTESES"): # WHILE
+            self.pop()
 
-        if self.matchGrupo(tab.TIPOS) or self.matchTipo("DOIS_PONTOS"):
-            resul = self.loop_for()
-            if not resul: return []
-            resul.pos = pos
-            return resul
+            if len(valor1) < 1:
+                self.erro("SINTATICO", "ESTRUTURA DE REPETICAO SEM CONDICAO DE PARADA")
+                return []
 
-        elif self.ehValor():
-            resul = self.loop_while()
-            if not resul: return []
-            resul.pos = pos
-            return resul
+            if self.matchTipo("ABRE_CHAVE"):
+                corpo = self.bloco()
+                if corpo:
+                    return ast.Loop(valor1, corpo, pos)
+                
+            self.erro("SINTATICO", "ESTRUTURA DE REPETICAO SEM CORPO")
+            return []
+        
 
-        else:
-            self.erro("SINTATICO", "ESTRUTURA DE REPETICAO COM PARAMETROS MAL FORMULADOS")
-            self.panic_parenteses()
-            if self.matchTipo("FECHA_PARENTESES"):
+        if self.matchTipo("DOIS_PONTOS"): # FOR
+            self.pop()
+
+            valor2 = self.loop_()
+            if len(valor2) < 1:
+                self.erro("SINTATICO", "ESTRUTURA DE REPETICAO SEM CONDICAO DE PARADA")
+                return []
+
+            if self.matchTipo("DOIS_PONTOS"):
                 self.pop()
+                valor3 = self.loop_()
 
-        return []
-
-    def loop_while(self):
-        param = []
-        if self.ehValor():
-            param = self.expressao()
-            if not param:
-                self.erro("SINTATICO", "ESTRUTURA DE REPETICAO COM CONDICAO MAL FORMULADA")
-                self.panic_parenteses()
                 if self.matchTipo("FECHA_PARENTESES"):
                     self.pop()
-                return[]
+                else:
+                    self.erro("SINTATICO", "ESTRUTURA DE REPETICAO MAL FORMATADA. ESPERAVA )")
+                    self.panic_parenteses()
+                    if self.matchTipo("FECHA_PARENTESES"):
+                        self.pop
+                    return []
 
-        if self.matchTipo("FECHA_PARENTESES"):
-            self.pop()
-        else:
-            self.erro("SINTATICO", "ESTRUTURA DE REPETICAO MAL FORMATADA. ESPERAVA )")
-            self.panic_parenteses()
-            if self.matchTipo("FECHA_PARENTESES"):
-                self.pop()
-            if not self.matchTipo("ABRE_CHAVE"): return []
-
-        if not self.matchTipo("ABRE_CHAVE"):
-            self.erro("SINTATICO", "ESTRUTURA DE REPETICAO SEM CORPO")
-            return []
-
-        corpo = self.bloco()
-        if not corpo:
-            self.erro("SINTATICO", "ESTRUTURA DE REPETICAO SEM CORTPO")
-
-        return ast.Loop(param, corpo, None)
-
-    def loop_for(self):
-        param1 = self.loop_for_1()
-        if self.matchTipo("DOIS_PONTOS"):
-            self.pop()
-        else:
-            self.erro("SINTATICO", "ESTRUTURA DE REPETICAO MAL FORMULADA. ESPERAVA :")
-            self.panic_parenteses()
-            if self.matchTipo("FECHA_PARENTESES"): self.pop()
-            return []
-        
-        param2 = self.loop_for_2()
-        if not param2:
-            self.erro("SINTATICO", "ESTRUTURA DE REPETICAO COM CONDICAO DE PARADA MAL FORMULADA")
-            self.panic_parenteses()
-            if self.matchTipo("FECHA_PARENTESES"): self.pop()
-            return []
-
-        elif not self.matchTipo("DOIS_PONTOS"):
-            self.erro("SINTATICO", "ESTRUTURA DE REPETICAO MAL FORMULADA. ESPERAVA :")
-            if not self.matchTipo("FECHA_PARENTESES"):
+            else:
+                self.erro("SINTATICO", "ESTRUTURA DE REPETICAO MAL FORMATADA. ESPERAVA :")
                 self.panic_parenteses()
-
-        self.pop()
-
-        param3 = self.loop_for_3()
-        if self.matchTipo("FECHA_PARENTESES"):
-            self.pop()
-        else:
-            self.erro("SINTATICO", "ESTRUTURA DE REPETICAO MAL FORMULADA. ESPERAVA )")
-            self.panic_parenteses()
-            if self.matchTipo("FECHA_PARENTESES"): self.pop()
-
-        if not self.matchTipo("ABRE_CHAVE"):
+                if self.matchTipo("FECHA_PARENTESES"):
+                    self.pop
+                return []
+            
+            if self.matchTipo("ABRE_CHAVE"):
+                corpo = self.bloco()
+                if corpo:
+                    novo_corpo = corpo.statements + valor3
+                    loop = ast.Loop(valor2, novo_corpo, pos)
+                    bloco = ast.Bloco(valor1 + [loop], corpo.pos)
+                    return bloco
+                
             self.erro("SINTATICO", "ESTRUTURA DE REPETICAO SEM CORPO")
-            return []
 
-        corpo = self.bloco()
-        corpo = ast.Bloco(param1 + corpo.statements + param3, None)
-        return ast.Loop(param2, corpo, None)
+        self.erro("SINTATICO", "ESTRUTURA DE REPETICAO MAL FORMATADA. ESPERAVA UMA EXPRESSAO")
+        return []        
+        
 
-    def loop_for_1(self):
-        if self.matchTipo("DOIS_PONTOS") or self.matchTipo("FECHA_PARENTESES"):
-            return []
-        
-        elif self.matchGrupo(tab.TIPOS):
-            decl = self.declaracao()
-            if not decl: return [False]
-            return decl + self.loop_for_1()
-        
-        elif self.matchTipo("PONTO_VIRGULA"):
-            self.pop()
-            return self.loop_for_1()
-        
-        self.erro("SINTATICO", "ESTRUTURA DE REPETICAO COM PARAMETRO MAL FORMULADO")
-        return []
-    
-    def loop_for_2(self):
-        if self.matchTipo("DOIS_PONTOS") or self.matchTipo("FECHA_PARENTESES"):
-            return []
+    def loop_(self):
+        if self.matchGrupo(tab.TIPOS):
+            return self.declaracao()
         
         elif self.ehValor():
-            expr = self.expressao()
-            if not expr: return False
-            return [expr] + self.loop_for_2()
+            return self.expressao()
         
-        self.erro("SINTATICO", "ESTRUTURA DE REPETICAO COM PARAMETRO MAL FORMULADO")
-        return []
-
-    def loop_for_3(self):
-        if self.matchTipo("FECHA_PARENTESES"):
-            return []
-        
-        elif self.ehValor():
-            expr = self.atribuicao()
-            if not expr: return False
-            return [expr] + self.loop_for_3()
-        
-        elif self.matchGrupo(FUNCOES):
-            fun = self.funcao()
-            if not fun: return False
-            return [fun] + self.loop_for_3()
-        
-        elif self.matchTipo("PONTO_VIRGULA"):
-            self.pop()
-            return self.loop_for_3()
-        
-        self.erro("SINTATICO", "ESTRUTURA DE REPETICAO COM PARAMETRO MAL FORMULADO")
-        return []
+        else:
+            self.erro("SINTATICO", "ESTRUTURA DE REPETICAO MAL FORMATADA. ESPERAVA UMA EXPRESSAO")
+            return [False]
 
 
     def quebra_declaracoes(self, v, tipo):
@@ -700,24 +618,25 @@ class Sintatico:
             return False
         
         if self.ehValor():
-            no = self.noValorAtual()
-            self.pop()
-            return self.expressao11_(no)
+            return self.expressao11_()
         
         self.erro("SINTATICO", "EXPRESSAO MAL FORMULADA")
         return False
     
-    def expressao11_(self, chamada):
+    def expressao11_(self):
+        no = self.noValorAtual()
+        self.pop()
+
         if self.matchTipo("ABRE_PARENTESES"): # chamada de funcao
             self.pop()
             param = self.expressao()
             if param:
                 if self.matchTipo("FECHA_PARENTESES"):
                     self.pop()
-                    return ast.ChamadaFuncao(chamada, param, None)
+                    return ast.ChamadaFuncao(no, param, None)
                 self.erro("SINTATICO", "EXPRESSAO MAL FORMULADA OU FALTANTE")
         # nao era chamada de funcao
-        return chamada
+        return no
 
         
 
