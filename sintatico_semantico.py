@@ -121,6 +121,11 @@ class Sintatico:
         sucesso, erro = self.tabela_simbolos.adiciona_variavel(nome, tipo, pos)
         if sucesso: return
         self.erro("SEMANTICO", erro)
+    
+    def declara_variavel(self, declaracao):
+        sucesso, erro = self.tabela_simbolos.declaracao(declaracao)
+        if sucesso: return
+        self.erro("SEMANTICO", erro)
 
     def adiciona_funcao(self, nome, params, tipo, pos):
         sucesso, erro = self.tabela_simbolos.adiciona_funcao(nome, tipo, pos)
@@ -157,11 +162,6 @@ class Sintatico:
         if sucesso: return True
         self.erro("SEMANTICO", tipo)
         return False
-        
-    def resolve_operacao(self, no):
-        if sucesso: return tipo
-        self.erro("SEMANTICO", tipo)
-        return no
 
 
 
@@ -414,13 +414,13 @@ class Sintatico:
             
             declaracao = ast.Declaracao(identificador, tipo, pos)
             atribuicao = ast.OperacaoBin("ATRIBUICAO", identificador, valor, v[0].pos, None)
-            self.adiciona_variavel(identificador, tipo, pos)
+            self.declara_variavel(declaracao)
             self.atribui_tabela(atribuicao)
 
             return [declaracao, atribuicao] + self.quebra_declaracoes(v[1:], tipo)
 
         if isinstance(v[0], ast.Identificador):
-            self.adiciona_variavel(v[0], tipo, pos)
+            self.declara_variavel(v[0], tipo, pos)
             return [ast.Declaracao(v[0], tipo, v[0].pos)] + self.quebra_declaracoes(v[1:], tipo)
         return self.quebra_declaracoes(v[1:], tipo)
 
@@ -435,8 +435,8 @@ class Sintatico:
             return[]
         
         valores = self.expressao()
+        print("QUEBRAR: ",valores)
         comandos = self.quebra_declaracoes(valores, tipo)
-
         return comandos
 
 
@@ -447,7 +447,6 @@ class Sintatico:
             self.pop()
             return no + self.expressao()
 
-        #no = self.resolve_operacao(no)
         return no
 
 
@@ -464,7 +463,6 @@ class Sintatico:
             operador = "ATRIBUICAO"
 
         atribuicao = ast.OperacaoBin(operador, esquerda, direita, pos, None)
-        self.atribui_tabela(atribuicao)
         return atribuicao
         
     def expressao1_(self):
@@ -484,7 +482,6 @@ class Sintatico:
                 operador = "ATRIBUICAO"
             
             atribuicao = ast.OperacaoBin("ATRIBUICAO", esquerda, direita, pos, None)
-            self.atribui_tabela(atribuicao)
             return atribuicao
 
         return []

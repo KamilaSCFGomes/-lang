@@ -194,19 +194,28 @@ class TabelaSimbolos:
         if not valor: return False, f"valor da variavel {nome} nao declarado"
         return True, valor
 
+    def retorna_variavel(self, identificador):
+        nome = identificador.nome if isinstance(identificador, ast.Identificador) else identificador
+        sucesso, tipo = self.verifica_variavel(nome)
+        if not sucesso: return sucesso, tipo
+
+        return True, self.tabela[nome]
+
 
     def declaracao(self, declaracao):
+        print("FUNCAO DECLARACAO")
         identificador = declaracao.nome
         if not isinstance(identificador, ast.Identificador):
             return False, f"declaracao sem identificador"
 
         nome = identificador.nome
         tipo = declaracao.tipo
-        posicao = declaracao.pos
+        pos = declaracao.pos
 
         return self.adiciona_variavel(nome, tipo, pos)
 
     def atribuicao(self, atribuicao):
+        print("FUNCAO ATRIBUICAO")
         if not isinstance(atribuicao, ast.OperacaoBin) or atribuicao.operador != "ATRIBUICAO":
             return False, "Erro de atribuicao"
 
@@ -218,31 +227,36 @@ class TabelaSimbolos:
         if not isinstance(identificador, ast.Identificador):
             return False, "Atribuicao mal formatada. esperava um identificador"
         
+        sucesso, variavel = self.retorna_variavel(identificador)
+        if not sucesso: return sucesso, variavel
+
         if isinstance(valor, ast.Literal):
             tipo = valor.tipo
             valor = valor.valor
 
         elif isinstance(valor, ast.Identificador):
-            sucesso, valor = self.valor_variavel(valor)
-            if not sucesso: return sucesso, valor
-            tipo = self.tabela[valor]['tipo']
+            sucesso, variavel = self.retorna_variavel(identificador)
+            if not sucesso: return sucesso, variavel
+            tipo = variavel['tipo']
+            valor = variavel['valor']
         
         else:
             sucesso, valor = self.resolve_expressao(valor)
             if not sucesso: return sucesso, valor
-            tipo = valor.tipo
+            return self.atribuicao(valor)
 
-        sucesso, erro = self.verifica_variavel(identificador)
-        if not sucesso: return sucesso, erro
+        sucesso, variavel = self.retorna_variavel(identificador)
+        if not sucesso: return sucesso, variavel
 
-        print(sucesso, tipo)
-        print(self.tabela[identificador.nome]['tipo'])
-        if self.tabela[identificador.nome]['tipo'] != tipo:
-            return False, f"tentativa de atribuicao de tipo {tipo} a variavel {identificador.nome} de tipo {self.tabela[identificador.nome]['tipo']}"
+        tipo_var = variavel['tipo']
+        if tipo != tipo_var and not (tipo == 'INT' and tipo_var == 'FLOAT'):
+            return False, f"tentativa de atribuicao de tipo {tipo} a variavel {identificador.nome} de tipo {tipo_var}"
 
         return self.atribui_identificador(identificador, valor)
 
     def resolve_expressao(self, no):
+        print("FUNCAO EXPRESSAO")
+        print("\nRESOLVE EXPRESSAO", no)
         if isinstance(no, ast.Literal):
             return True, no
         
