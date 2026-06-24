@@ -147,14 +147,11 @@ class TabelaSimbolos:
             print('')
 
     def abrir_escopo(self, loop=False):
-        print(f"escopo: {self.escopo_atual} -> {self.escopo_atual+1}")
         self.escopo_atual += 1
         if loop: self.escopo_com_loop += 1
 
     def fechar_escopo(self, loop=False):
         warnings = []
-        print(f"escopo: {self.escopo_atual} -> {self.escopo_atual-1}")
-
         remover = []
         self.imprimir_tabela()
         for variavel in self.tabela:
@@ -203,7 +200,6 @@ class TabelaSimbolos:
 
 
     def declaracao(self, declaracao):
-        print("FUNCAO DECLARACAO")
         identificador = declaracao.nome
         if not isinstance(identificador, ast.Identificador):
             return False, f"declaracao sem identificador"
@@ -215,14 +211,11 @@ class TabelaSimbolos:
         return self.adiciona_variavel(nome, tipo, pos)
 
     def atribuicao(self, atribuicao):
-        print("FUNCAO ATRIBUICAO")
         if not isinstance(atribuicao, ast.OperacaoBin) or atribuicao.operador != "ATRIBUICAO":
             return False, "Erro de atribuicao"
 
-        print("ATRIBUICAO", atribuicao)
         identificador = atribuicao.esquerda
         valor = atribuicao.direita
-        print(identificador, valor)
 
         if not isinstance(identificador, ast.Identificador):
             return False, "Atribuicao mal formatada. esperava um identificador"
@@ -230,16 +223,16 @@ class TabelaSimbolos:
         sucesso, variavel = self.retorna_variavel(identificador)
         if not sucesso: return sucesso, variavel
 
-        if isinstance(valor, ast.Literal):
+        if isinstance(valor, ast.Identificador):
+            sucesso, variavel = self.retorna_valor(valor)
+            if not sucesso: return sucesso, variavel
+            tipo = variavel.tipo
+            valor = variavel.valor
+        
+        elif isinstance(valor, ast.Literal):
             tipo = valor.tipo
             valor = valor.valor
-
-        elif isinstance(valor, ast.Identificador):
-            sucesso, variavel = self.retorna_variavel(identificador)
-            if not sucesso: return sucesso, variavel
-            tipo = variavel['tipo']
-            valor = variavel['valor']
-        
+            
         else:
             sucesso, valor = self.resolve_expressao(valor)
             if not sucesso: return sucesso, valor
@@ -254,37 +247,101 @@ class TabelaSimbolos:
 
         return self.atribui_identificador(identificador, valor)
 
+    def retorna_valor(self, no):
+        if isinstance(no, ast.Literal):
+            tipo = no.tipo
+            valor = no.valor
+
+        elif isinstance(no, ast.Identificador):
+            sucesso, variavel = self.retorna_variavel(no)
+            if not sucesso: return sucesso, variavel
+            tipo = variavel['tipo']
+            valor = variavel['valor']
+            literal = ast.Literal(valor, tipo, None)
+
+        else:
+            return False, "Erro ao recuperar o valor de um nó"
+        
+        return True, {'valor':valor, 'tipo':tipo}
+
+    def calcula_expressao(self, no):
+        operador = no.operador
+        pos = no.pos
+
+        if operador == "NAO":
+            valor = no.operando.valor == "True"
+            return True, ast.Literal(valor, 'BOOLEANO', pos)
+        
+        esquerda = no.esquerda
+        direita = no.direita
+        if operador == "MAIOR":
+            return True, ast.Literal(str(esquerda>direita), 'BOOLEANO', pos)
+        
+        if operador == "AND":
+            return True, ast.Literal(str(esquerda and direita), 'BOOLEANO', pos)
+        
+        if operador == "OR":
+            return True, ast.Literal(str(esquerda or direita), 'BOOLEANO', pos)
+        
+        
+        tipo = TABELA_OPERACOES[operador][esquerda][direita]
+
+        if operador == "MAIS":
+            return True, ast.Literal(str(esquerda+direita), tipo, pos)
+        
+        if operador == "VEZES":
+            return True, ast.Literal(str(esquerda*direita), tipo, pos)
+        
+        if operador == "MENOS":
+            return True, ast.Literal(str(esquerda-direita), tipo, pos)
+        
+        if operador == "DIVIDIDO":
+            return True, ast.Literal(str(esquerda/direita), tipo, pos)
+
     def resolve_expressao(self, no):
         print("FUNCAO EXPRESSAO")
         print("\nRESOLVE EXPRESSAO", no)
-        if isinstance(no, ast.Literal):
-            return True, no
         
-        if isinstance(no, ast.Identificador):
-            return self.valor_variavel(no)
+        if isinstance(no, ast.Identificador) or isinstance(no, ast.Literal):
+            return True, no
         
         if isinstance(no, ast.OperacaoUn):
             operador = no.operador
-            try: operador = OPERACOES_SEMELHANTES[operador]
-            except: return False, "Operador nao encontrado na tabela de expressoes"
+            try: operador2 = OPERACOES_SEMELHANTES[operador]
+            except: return False, f"Operador {operador} nao encontrado na tabela de expressoes"
+
             sucesso, operando = self.resolve_expressao(no.operando)
             if not sucesso: return sucesso, operando
 
-            if not operador in TABELA_OPERACOES:
+            if not operador2 in TABELA_OPERACOES:
                 return False, "Operador nao encontrado na tabela de expressoes"
+            
             if not operando.tipo in TABELA_OPERACOES[operador]:
                 return False, f"Operacao {operador} nao permitida para o tipo {operando.tipo}"
-            return True, TABELA_OPERACOES[operador][operando.tipo]
+            
+            return 
 
         if isinstance(no, ast.OperacaoBin):
             operador = no.operador
+            try: operador2 = OPERACOES_SEMELHANTES[operador]
+            except: return False, f"Operador {operador} nao encontrado na tabela de expressoes"
+
             sucesso, esquerda = self.resolve_expressao(no.esquerda)
             if not sucesso: return sucesso, esquerda
+
             sucesso, direita = self.resolve_expressao(no.direita)
             if not sucesso: return sucesso, direita
+
             print("COISOOOO",operador, esquerda, direita)
-            if not operador in TABELA_OPERACOES:
-                return False, "Operador nao encontrado na tabela de expressoes"
-            if not esquerda.tipo in TABELA_OPERACOES[operador]:
+
+            if not operador2 in TABELA_OPERACOES:
+                return False, f"Operador {operador} nao encontrado na tabela de expressoes"
+            
+            if not esquerda.tipo in TABELA_OPERACOES[operador2]:
                 return False, f"Operacao {operador} nao permitida para o tipo {esquerda.tipo}"
-            return True, TABELA_OPERACOES[operador][esquerda.tipo]
+            
+            if not direita.tipo in TABELA_OPERACOES[operador2][esquerda.tipo]:
+                return False, f"Operacao {operador} nao permitida entr os tipos {esquerda.tipo} e {direita.tipo}"
+            
+            
+            return self.calcula_expressao(no)

@@ -19,6 +19,7 @@ class Tipo(No):
 class Identificador(No):
     nome: str
     pos: Optional[[]]
+    tipo: Optional[str]
 
 @dataclass
 class Declaracao(No):

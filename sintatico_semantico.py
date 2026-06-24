@@ -37,7 +37,7 @@ class Sintatico:
         if self.matchClasse("LITERAL"):
             return ast.Literal(self.valorAtual(), self.tipoAtual(), self.posAtual())
         if self.matchClasse("IDENTIFICADOR"):
-            return ast.Identificador(self.valorAtual(), self.posAtual())
+            return ast.Identificador(self.valorAtual(), self.posAtual(), None)
         
         return False
     
@@ -117,8 +117,8 @@ class Sintatico:
             self.warning(resposta)
             return
 
-    def adiciona_variavel(self, nome, tipo, pos):
-        sucesso, erro = self.tabela_simbolos.adiciona_variavel(nome, tipo, pos)
+    def adiciona_variavel(self, decla):
+        sucesso, erro = self.tabela_simbolos.declaracao(decla)
         if sucesso: return
         self.erro("SEMANTICO", erro)
     
@@ -163,7 +163,11 @@ class Sintatico:
         self.erro("SEMANTICO", tipo)
         return False
 
-
+    def resolve_expressao(self, expressao):
+        sucesso, tipo = self.tabela_simbolos.resolve_expressao(expressao)
+        if sucesso: return tipo
+        self.erro("SEMANTICO", tipo)
+        return False
 
     def bloco(self):
         if self.matchTipo("ABRE_CHAVE"):
@@ -434,14 +438,12 @@ class Sintatico:
             self.erro("SINTATICO", "DECLARACAO SEM IDENTIFICADOR")
             return[]
         
-        valores = self.expressao()
-        print("QUEBRAR: ",valores)
-        comandos = self.quebra_declaracoes(valores, tipo)
+        comandos = self.expressao(tipo)
         return comandos
 
 
-    def expressao(self): # virgula
-        no = [self.expressao1()]
+    def expressao(self, decla=False): # virgula
+        no = [self.expressao1(decla)]
 
         if self.tipoAtual() == "VIRGULA":
             self.pop()
@@ -450,22 +452,34 @@ class Sintatico:
         return no
 
 
-    def expressao1(self): # atribuicao
+    def expressao1(self, decla=False): # atribuicao
+        print('EXPRESSAO1 ', self.valorAtual())
         pos = self.posAtual()
         esquerda = self.expressao2()
         operador = self.tipoAtual()
-        direita = self.expressao1_()
+        direita = self.expressao1_(decla)
+        comandos = []
 
         if not direita: return esquerda
+        if decla:
+            decla = ast.Declaracao(esquerda, decla, pos)
+            comandos += [decla]
+            self.adiciona_variavel(decla)
+
         if operador != "ATRIBUICAO":
             operador = CONVERSAO_DE_OPERADOR[operador]
             direita = ast.OperacaoBin(operador, esquerda, direita, pos, None)
             operador = "ATRIBUICAO"
 
         atribuicao = ast.OperacaoBin(operador, esquerda, direita, pos, None)
-        return atribuicao
+        atribuicao = self.atribui_tabela(atribuicao)
+        if not atribuicao: return []
+        comandos += [atribuicao]
+        print(comandos)
+        return comandos
         
-    def expressao1_(self):
+    def expressao1_(self, decla=False):
+        print('EXPRESSAO1- ', self.valorAtual())
         pos = self.posAtual()
         operador = self.tipoAtual()
 
@@ -474,15 +488,23 @@ class Sintatico:
 
             esquerda = self.expressao2()
             direita = self.expressao1_()
+            print('esq-dir', esquerda, direita)
             if not direita: return esquerda
+            if decla: comandos += [ast.Declaracao(esquerda, decla, pos)]
             
             if operador != "ATRIBUICAO":
                 operador = CONVERSAO_DE_OPERADOR[operador]
                 direita = ast.OperacaoBin(operador, esquerda, direita, pos, None)
+                direita = self.resolve_expressao(direita)
+                if not direita: return []
                 operador = "ATRIBUICAO"
             
             atribuicao = ast.OperacaoBin("ATRIBUICAO", esquerda, direita, pos, None)
-            return atribuicao
+            atribuicao = self.atribui_tabela(atribuicao)
+            if not atribuicao: return []
+            comandos += [atribuicao]
+            print(comandos)
+            return comandos
 
         return []
 
